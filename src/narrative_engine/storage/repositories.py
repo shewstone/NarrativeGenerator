@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import List, Optional, Sequence
 from uuid import UUID
 
@@ -9,12 +10,15 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
+from narrative_engine.logging_config import LogTimer
 from narrative_engine.models import Actor, Cycle, Episode, Thesis
 from narrative_engine.storage.orm_models import (
     CycleORM,
     EpisodeORM,
     ThesisORM,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class EpisodeRepository:
@@ -25,25 +29,62 @@ class EpisodeRepository:
 
     async def create(self, episode: Episode) -> Episode:
         """Create a new episode."""
-        orm_episode = self._to_orm(episode)
-        self.session.add(orm_episode)
-        await self.session.flush()
-        await self.session.refresh(orm_episode)
-        return self._from_orm(orm_episode)
+        with LogTimer(logger, "episode_create", episode_id=str(episode.id)):
+            try:
+                orm_episode = self._to_orm(episode)
+                self.session.add(orm_episode)
+                await self.session.flush()
+                await self.session.refresh(orm_episode)
+                logger.info(
+                    "episode_created",
+                    episode_id=str(episode.id),
+                    title=episode.title,
+                    arc_type=episode.arc_type.value if episode.arc_type else None,
+                )
+                return self._from_orm(orm_episode)
+            except Exception as e:
+                logger.error(
+                    "episode_create_failed",
+                    episode_id=str(episode.id),
+                    error=str(e),
+                    exc_info=True,
+                )
+                raise
 
     async def get_by_id(self, episode_id: UUID) -> Optional[Episode]:
         """Get episode by ID with all relationships."""
-        result = await self.session.execute(
-            select(EpisodeORM)
-            .where(EpisodeORM.id == episode_id)
-            .options(
-                selectinload(EpisodeORM.actors),
-                selectinload(EpisodeORM.source_passages),
-                selectinload(EpisodeORM.cycles),
-            )
-        )
-        orm_episode = result.scalar_one_or_none()
-        return self._from_orm(orm_episode) if orm_episode else None
+        with LogTimer(logger, "episode_get_by_id", episode_id=str(episode_id)):
+            try:
+                result = await self.session.execute(
+                    select(EpisodeORM)
+                    .where(EpisodeORM.id == episode_id)
+                    .options(
+                        selectinload(EpisodeORM.actors),
+                        selectinload(EpisodeORM.source_passages),
+                        selectinload(EpisodeORM.cycles),
+                    )
+                )
+                orm_episode = result.scalar_one_or_none()
+                if orm_episode:
+                    logger.debug(
+                        "episode_found",
+                        episode_id=str(episode_id),
+                        title=orm_episode.title,
+                    )
+                else:
+                    logger.warning(
+                        "episode_not_found",
+                        episode_id=str(episode_id),
+                    )
+                return self._from_orm(orm_episode) if orm_episode else None
+            except Exception as e:
+                logger.error(
+                    "episode_get_by_id_failed",
+                    episode_id=str(episode_id),
+                    error=str(e),
+                    exc_info=True,
+                )
+                raise
 
     async def get_by_arc_type(
         self,
