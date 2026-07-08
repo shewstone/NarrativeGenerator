@@ -18,7 +18,7 @@ PROMPT_VERSIONS = {
 
 def get_segmentation_prompt(text: str) -> str:
     """Prompt for identifying episode boundaries.
-    
+
     Stage 1: Split text into discrete narrative units (episodes).
     """
     return f"""You are a historical narrative analyzer. Your task is to identify distinct episodes (bounded narrative units) in the provided text.
@@ -53,7 +53,7 @@ Return only valid JSON."""
 
 def get_extraction_prompt(segment_text: str, segment_summary: str) -> str:
     """Prompt for extracting structured data from an episode.
-    
+
     Stage 2: Pull actors, conditions, mechanics, resolution from segment.
     """
     return f"""You are extracting structured historical data from a narrative segment. Extract all relevant information.
@@ -95,14 +95,16 @@ Return only valid JSON matching this schema. Use null for unknown fields."""
 
 def get_classification_prompt(episode_summary: str, full_text: str) -> str:
     """Prompt for classifying arc type and phase.
-    
+
     Stage 3: Assign arc type, phase, and confidence.
     """
-    arc_descriptions = "\n".join([
-        f"- {key}: {value['description']}\n  Phases: {', '.join(value['phases'])}"
-        for key, value in DEFAULT_ARC_TAXONOMY.items()
-    ])
-    
+    arc_descriptions = "\n".join(
+        [
+            f"- {key}: {value['description']}\n  Phases: {', '.join(value['phases'])}"
+            for key, value in DEFAULT_ARC_TAXONOMY.items()
+        ]
+    )
+
     return f"""You are a narrative pattern classifier. Analyze this historical episode and classify its archetypal structure.
 
 **Episode summary:**
@@ -156,14 +158,16 @@ def get_classification_second_pass_prompt(
     similar_episodes: List[Dict],
 ) -> str:
     """Prompt for second-pass classification with nearest-neighbor guidance.
-    
+
     Improves label stability across corpus.
     """
-    similar_text = "\n".join([
-        f"- {ep.get('title', 'Unknown')}: classified as {ep.get('arc_type', 'unknown')}, {ep.get('arc_phase', 'unknown')}"
-        for ep in similar_episodes[:5]
-    ])
-    
+    similar_text = "\n".join(
+        [
+            f"- {ep.get('title', 'Unknown')}: classified as {ep.get('arc_type', 'unknown')}, {ep.get('arc_phase', 'unknown')}"
+            for ep in similar_episodes[:5]
+        ]
+    )
+
     return f"""You are refining a narrative classification. Review the initial classification in light of similar episodes.
 
 **Episode:**
@@ -197,7 +201,7 @@ Return only valid JSON."""
 
 def get_linking_prompt(episode1: Dict, episode2: Dict) -> str:
     """Prompt for entity resolution and causal linking.
-    
+
     Stage 4: Determine if two episodes describe same event or are causally related.
     """
     return f"""You are analyzing the relationship between two historical episodes for entity resolution.
@@ -238,14 +242,16 @@ Return only valid JSON."""
 
 def get_causal_linking_prompt(source_episode: Dict, target_episodes: List[Dict]) -> str:
     """Prompt for finding causal connections from source to potential targets.
-    
+
     Identifies downstream consequences.
     """
-    targets_text = "\n".join([
-        f"{i+1}. {ep.get('title', 'Unknown')}: {ep.get('summary', 'Unknown')[:100]}..."
-        for i, ep in enumerate(target_episodes[:10])
-    ])
-    
+    targets_text = "\n".join(
+        [
+            f"{i+1}. {ep.get('title', 'Unknown')}: {ep.get('summary', 'Unknown')[:100]}..."
+            for i, ep in enumerate(target_episodes[:10])
+        ]
+    )
+
     return f"""You are identifying causal connections between historical events.
 
 **Source episode:**

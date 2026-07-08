@@ -15,8 +15,7 @@ from narrative_engine.storage.config import DatabaseConfig
 
 # Use test database URL from environment or default
 TEST_DATABASE_URL = os.getenv(
-    "TEST_DATABASE_URL",
-    "postgresql+asyncpg://localhost:5432/narrative_engine_test"
+    "TEST_DATABASE_URL", "postgresql+asyncpg://localhost:5432/narrative_engine_test"
 )
 
 
@@ -28,17 +27,17 @@ async def engine():
         echo=False,
         poolclass=None,  # NullPool for tests
     )
-    
+
     # Create all tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    
+
     yield engine
-    
+
     # Drop all tables after tests
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
-    
+
     await engine.dispose()
 
 
@@ -52,7 +51,7 @@ async def db_session(engine) -> AsyncGenerator[AsyncSession, None]:
         autocommit=False,
         autoflush=False,
     )
-    
+
     async with async_session() as session:
         yield session
         # Rollback after each test
@@ -68,16 +67,10 @@ def sample_episode_data():
         "location": "United States",
         "initiating_conditions": [
             "Speculative excess in stock market",
-            "Margin trading widespread"
+            "Margin trading widespread",
         ],
-        "escalation_mechanics": [
-            "Panic selling cascades",
-            "Margin calls force liquidation"
-        ],
-        "consequences": [
-            "Great Depression begins",
-            "Banking crisis follows"
-        ],
+        "escalation_mechanics": ["Panic selling cascades", "Margin calls force liquidation"],
+        "consequences": ["Great Depression begins", "Banking crisis follows"],
     }
 
 
@@ -98,14 +91,8 @@ def sample_thesis_data():
     return {
         "query": "Will 2024 see a market crash?",
         "dominant_continuation": "Soft landing likely based on historical analogs",
-        "alternative_continuations": [
-            ("Hard landing", 0.3),
-            ("Continued expansion", 0.2)
-        ],
-        "watch_for_indicators": [
-            "Credit spreads widening",
-            "Yield curve inversion persistence"
-        ],
+        "alternative_continuations": [("Hard landing", 0.3), ("Continued expansion", 0.2)],
+        "watch_for_indicators": ["Credit spreads widening", "Yield curve inversion persistence"],
         "model_version": "gpt-4",
         "taxonomy_version": "v0.1.0",
     }
