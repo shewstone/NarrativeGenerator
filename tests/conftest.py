@@ -1,8 +1,7 @@
 """Pytest configuration and fixtures."""
 
-import asyncio
 import os
-from typing import AsyncGenerator, Generator
+from typing import AsyncGenerator
 
 import pytest
 import pytest_asyncio
@@ -30,12 +29,9 @@ async def engine():
         poolclass=NullPool,  # NullPool for tests - no connection pooling
     )
 
-    # Create pgvector extension first
+    # Create pgvector extension AND tables in same connection block
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-
-    # Create tables in a fresh connection
-    async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
     yield engine
