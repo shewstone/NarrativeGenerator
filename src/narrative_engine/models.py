@@ -231,10 +231,15 @@ class Thesis(BaseModel):
     analog_similarity_scores: List[float] = Field(default_factory=list)
 
     # Thesis content
-    dominant_continuation: str
+    dominant_continuation: Optional[Continuation] = None
     alternative_continuations: List[tuple[str, float]] = Field(default_factory=list)  # (scenario, frequency)
+    confidence: ThesisConfidence = ThesisConfidence.UNKNOWN
     watch_for_indicators: List[str] = Field(default_factory=list)
+    key_uncertainties: List[str] = Field(default_factory=list)
     confidence_interval: Optional[tuple[float, float]] = None
+
+    # LLM narrative synthesis (optional enhancement)
+    narrative_synthesis: Optional[str] = None  # Human-readable interpretation
 
     # Timing
     estimated_duration: Optional[str] = None
@@ -251,7 +256,7 @@ class Thesis(BaseModel):
 
     # Metadata
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    model_version: str  # LLM model used
+    model_version: str  # Model used (algorithm or LLM)
     taxonomy_version: str  # Arc taxonomy version
 
 

@@ -102,6 +102,36 @@ Output:
 }}
 """
 
+THESIS_NARRATIVE_PROMPT = """You are a narrative forecasting analyst. Interpret the following algorithmic forecast results and provide a compelling narrative synthesis.
+
+Algorithmic Forecast Results:
+- Dominant Continuation: {dominant_continuation}
+- Probability: {probability}
+- Alternative Scenarios: {alternatives}
+- Confidence: {confidence}
+- Key Uncertainties: {uncertainties}
+
+Historical Analogs Supporting This Forecast:
+{analogs}
+
+Task:
+Write a 2-3 paragraph narrative synthesis that:
+1. Explains the dominant pattern in accessible terms
+2. Describes what makes this situation similar to the historical analogs
+3. Acknowledges the key uncertainties and alternative paths
+4. Uses specific examples from the analogs
+
+Tone: Analytical but accessible. Like a good financial journalist or historian explaining the pattern.
+
+Output:
+{{
+    "narrative_summary": "The 2-3 paragraph synthesis",
+    "key_pattern": "One-sentence summary of the dominant pattern",
+    "analog_strength": "Why these analogs are relevant",
+    "dissenting_view": "Brief acknowledgment of why it might be different this time"
+}}
+"""
+
 
 def format_analogs(analogs: list) -> str:
     """Format analogs for prompt."""

@@ -91,6 +91,15 @@ class ThesisGenerator:
         # Generate key uncertainties
         uncertainties = self._identify_uncertainties(evidence)
 
+        # Generate narrative synthesis (optional LLM enhancement)
+        narrative = self._generate_narrative(
+            query_episode,
+            evidence,
+            continuations[0] if continuations else None,
+            confidence,
+            uncertainties,
+        )
+
         thesis = Thesis(
             id=uuid4(),
             query=self._formulate_query(query_episode),
@@ -103,12 +112,14 @@ class ThesisGenerator:
             key_uncertainties=uncertainties,
             model_version="thesis-v1.0",
             taxonomy_version="arc-v0.1.0",
+            narrative_synthesis=narrative,
         )
 
         self.logger.info(
             "Thesis generated",
             thesis_id=str(thesis.id),
             confidence=thesis.confidence.value,
+            has_narrative=narrative is not None,
         )
 
         return thesis
@@ -312,6 +323,70 @@ class ThesisGenerator:
 
         return f"What is the likely outcome of '{episode.title}' ({arc}, {phase} phase)?"
 
+    def _generate_narrative(
+        self,
+        query_episode: Episode,
+        evidence: List[AnalogEvidence],
+        dominant_continuation: Optional[Continuation],
+        confidence: ThesisConfidence,
+        uncertainties: List[str],
+    ) -> Optional[str]:
+        """Generate narrative synthesis using LLM.
+
+        This is optional - if LLM is not available, returns None
+        and the thesis relies on algorithmic results only.
+        """
+        try:
+            # Try to import and use LLM client
+            from narrative_engine.extraction.client import get_llm_client
+
+            llm = get_llm_client()
+            if not llm:
+                self.logger.debug("No LLM client available for narrative synthesis")
+                return None
+
+            from narrative_engine.thesis.prompts import (
+                THESIS_NARRATIVE_PROMPT,
+                format_analogs,
+            )
+
+            # Format analogs for prompt
+            analogs = [e.analog for e in evidence[:5]]
+            analogs_text = format_analogs(analogs)
+
+            # Format alternatives
+            alternatives_text = ""
+            if len(evidence) > 1:
+                alt_continuations = list(set([e.continuation for e in evidence[1:5]]))
+                alternatives_text = "; ".join(alt_continuations[:3])
+
+            prompt = THESIS_NARRATIVE_PROMPT.format(
+                dominant_continuation=dominant_continuation.description if dominant_continuation else "Unknown",
+                probability=dominant_continuation.probability if dominant_continuation else 0.0,
+                alternatives=alternatives_text or "None identified",
+                confidence=confidence.value,
+                uncertainties="; ".join(uncertainties[:3]) if uncertainties else "None identified",
+                analogs=analogs_text,
+            )
+
+            response = llm.complete(prompt)
+
+            # Parse JSON response
+            import json
+            try:
+                result = json.loads(response)
+                return result.get("narrative_summary", result.get("key_pattern", "No narrative generated"))
+            except json.JSONDecodeError:
+                # Fallback: return raw response
+                return response[:500] if response else None
+
+        except ImportError:
+            self.logger.debug("LLM client not available for narrative synthesis")
+            return None
+        except Exception as e:
+            self.logger.warning("Failed to generate narrative synthesis", error=str(e))
+            return None
+
     def _create_uncertain_thesis(
         self,
         query_episode: Episode,
@@ -330,4 +405,5 @@ class ThesisGenerator:
             key_uncertainties=["Insufficient historical analogs for reliable forecast"],
             model_version="thesis-v1.0",
             taxonomy_version="arc-v0.1.0",
+            narrative_synthesis=None,
         )
