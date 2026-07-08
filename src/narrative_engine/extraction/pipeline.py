@@ -22,7 +22,7 @@ logger = structlog.get_logger()
 
 class PipelineResult:
     """Result of a full extraction pipeline run."""
-    
+
     def __init__(
         self,
         source_chunk_id: str,
@@ -39,7 +39,7 @@ class PipelineResult:
 
 class ExtractionOrchestrator:
     """Orchestrates the full extraction pipeline from raw text to database."""
-    
+
     def __init__(
         self,
         pipeline: Optional[ExtractionPipeline] = None,
@@ -48,7 +48,7 @@ class ExtractionOrchestrator:
         self.pipeline = pipeline or ExtractionPipeline(config=config)
         self.config = config or ExtractionPipelineConfig.from_env()
         self.logger = structlog.get_logger()
-    
+
     async def process_text(
         self,
         text: str,
@@ -56,27 +56,28 @@ class ExtractionOrchestrator:
         session: AsyncSession,
     ) -> PipelineResult:
         """Process raw text through full pipeline and store results.
-        
+
         Stage 1: Segmentation → Stage 2: Extraction → Stage 3: Classification
         """
         import time
+
         start_time = time.time()
-        
+
         episodes: List[Episode] = []
         errors: List[str] = []
-        
+
         try:
             # Stage 1: Segmentation
             if self.config.enable_segmentation:
                 self.logger.info("Stage 1: Segmentation", chunk_id=source_chunk_id)
                 segmentation_result = await self.pipeline.segment(text)
-                
+
                 segments = segmentation_result.get("episodes", [])
                 self.logger.info(f"Found {len(segments)} segments")
             else:
                 # If segmentation disabled, treat whole text as one segment
                 segments = [{"number": 1, "summary": text[:200], "text": text}]
-            
+
             # Stage 2: Extraction
             for segment in segments:
                 try:
@@ -85,10 +86,10 @@ class ExtractionOrchestrator:
                         text,  # Full context
                         source_chunk_id,
                     )
-                    
+
                     if episode:
                         episodes.append(episode)
-                        
+
                 except Exception as e:
                     self.logger.error(
                         "Extraction failed for segment",
@@ -96,11 +97,11 @@ class ExtractionOrchestrator:
                         error=str(e),
                     )
                     errors.append(f"Segment {segment.get('number')}: {str(e)}")
-            
+
             # Stage 3: Classification
             if self.config.enable_classification:
                 self.logger.info("Stage 3: Classification")
-                
+
                 for episode in episodes:
                     try:
                         await self._classify_episode(episode)
@@ -111,23 +112,23 @@ class ExtractionOrchestrator:
                             error=str(e),
                         )
                         errors.append(f"Classification for {episode.title}: {str(e)}")
-            
+
             # Store in database
             await self._store_episodes(episodes, session)
-            
+
         except Exception as e:
             self.logger.error("Pipeline failed", error=str(e), chunk_id=source_chunk_id)
             errors.append(f"Pipeline: {str(e)}")
-        
+
         processing_time_ms = int((time.time() - start_time) * 1000)
-        
+
         return PipelineResult(
             source_chunk_id=source_chunk_id,
             episodes=episodes,
             processing_time_ms=processing_time_ms,
             errors=errors,
         )
-    
+
     async def _extract_segment(
         self,
         segment: Dict[str, Any],
@@ -137,16 +138,16 @@ class ExtractionOrchestrator:
         """Extract structured data from a single segment."""
         if not self.config.enable_extraction:
             return None
-        
+
         segment_text = segment.get("text", full_text)
         segment_summary = segment.get("summary", segment_text[:200])
-        
+
         # Call LLM for extraction
         extraction_result = await self.pipeline.extract(
             segment_text=segment_text,
             segment_summary=segment_summary,
         )
-        
+
         # Build Episode from extraction result
         episode = Episode(
             title=extraction_result.get("title", "Untitled"),
@@ -159,12 +160,14 @@ class ExtractionOrchestrator:
             consequences=extraction_result.get("consequences", []),
             extracted_from=[source_chunk_id],
         )
-        
+
         # Parse dates
         setting = extraction_result.get("setting", {})
         if setting.get("time_period"):
-            episode = await self._parse_dates(episode, setting["time_period"], setting.get("date_precision", "year"))
-        
+            episode = await self._parse_dates(
+                episode, setting["time_period"], setting.get("date_precision", "year")
+            )
+
         # Parse actors
         actors_data = extraction_result.get("actors", [])
         episode.actors = [
@@ -175,9 +178,9 @@ class ExtractionOrchestrator:
             )
             for a in actors_data
         ]
-        
+
         return episode
-    
+
     async def _classify_episode(self, episode: Episode) -> None:
         """Classify arc type and phase for an episode."""
         # First pass classification
@@ -185,41 +188,43 @@ class ExtractionOrchestrator:
             episode_summary=episode.summary,
             full_text=f"{episode.title}\n{episode.summary}",
         )
-        
+
         # Update episode with classification
         arc_type_str = classification.get("arc_type")
         arc_phase_str = classification.get("arc_phase")
-        
+
         if arc_type_str:
             try:
                 episode.arc_type = ArcType(arc_type_str)
             except ValueError:
                 self.logger.warning(f"Unknown arc type: {arc_type_str}")
-        
+
         if arc_phase_str:
             try:
                 episode.arc_phase = ArcPhase(arc_phase_str)
             except ValueError:
                 self.logger.warning(f"Unknown arc phase: {arc_phase_str}")
-        
+
         episode.phase_confidence = classification.get("phase_confidence", 0.0)
         episode.arc_rationale = classification.get("rationale")
-        
+
         # Handle secondary arcs
         secondary = classification.get("secondary_arcs", [])
         for sec in secondary:
             try:
-                episode.secondary_arcs.append((
-                    ArcType(sec.get("type", "unknown")),
-                    ArcPhase(sec.get("phase", "unknown")),
-                    sec.get("confidence", 0.5),
-                ))
+                episode.secondary_arcs.append(
+                    (
+                        ArcType(sec.get("type", "unknown")),
+                        ArcPhase(sec.get("phase", "unknown")),
+                        sec.get("confidence", 0.5),
+                    )
+                )
             except ValueError:
                 pass
-        
+
         # TODO: Second-pass classification with nearest neighbors
         # Requires vector search for similar episodes
-    
+
     async def _parse_dates(
         self,
         episode: Episode,
@@ -229,7 +234,7 @@ class ExtractionOrchestrator:
         """Parse date strings into datetime objects."""
         # Simple parsing—could be enhanced with dateparser
         from dateutil import parser as date_parser
-        
+
         try:
             # Try to parse as range (e.g., "1921-1923" or "1921 to 1923")
             if "-" in time_period or "to" in time_period:
@@ -245,12 +250,12 @@ class ExtractionOrchestrator:
                 date = date_parser.parse(time_period, fuzzy=True)
                 episode.start_date = date
                 episode.date_precision = precision
-                
+
         except Exception as e:
             self.logger.warning(f"Failed to parse date: {time_period}", error=str(e))
-        
+
         return episode
-    
+
     async def _store_episodes(
         self,
         episodes: List[Episode],
@@ -258,7 +263,7 @@ class ExtractionOrchestrator:
     ) -> None:
         """Store extracted episodes in database."""
         factory = RepositoryFactory(session)
-        
+
         for episode in episodes:
             try:
                 created = await factory.episodes.create(episode)
@@ -266,7 +271,7 @@ class ExtractionOrchestrator:
             except Exception as e:
                 self.logger.error(f"Failed to store episode: {episode.title}", error=str(e))
                 raise
-    
+
     async def process_batch(
         self,
         chunks: List[Dict[str, str]],  # [{"id": "...", "text": "..."}, ...]
@@ -274,7 +279,7 @@ class ExtractionOrchestrator:
     ) -> List[PipelineResult]:
         """Process multiple text chunks."""
         results = []
-        
+
         for chunk in chunks:
             result = await self.process_text(
                 text=chunk["text"],
@@ -282,5 +287,5 @@ class ExtractionOrchestrator:
                 session=session,
             )
             results.append(result)
-        
+
         return results
