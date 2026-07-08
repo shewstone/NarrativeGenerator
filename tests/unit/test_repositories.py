@@ -322,13 +322,4 @@ class TestRepositoryIntegration:
         assert episode.id in cycle_with_episodes.episode_ids
 
 
-# Fixtures needed for these tests
-
-@pytest.fixture
-async def db_session():
-    """Provide database session for tests.
-    
-    This should be provided by conftest.py in a real setup.
-    """
-    # Placeholder - actual implementation would use test database
-    pass
+# Fixtures are provided by tests/conftest.py
