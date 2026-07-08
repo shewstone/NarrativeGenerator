@@ -159,6 +159,10 @@ class EpisodeRepository:
         """Convert ORM to Pydantic model."""
         from narrative_engine.models import SourcePassage
 
+        # Handle async relationship loading - use getattr to avoid lazy loading issues
+        actors = getattr(orm, 'actors', None)
+        source_passages = getattr(orm, 'source_passages', None)
+        
         return Episode(
             id=orm.id,
             title=orm.title,
@@ -175,8 +179,8 @@ class EpisodeRepository:
                     role=a.role,
                     attributes=a.attributes,
                 )
-                for a in (orm.actors or [])
-            ],
+                for a in (actors or [])
+            ] if actors is not None else [],
             initiating_conditions=orm.initiating_conditions,
             escalation_mechanics=orm.escalation_mechanics,
             tension=orm.tension,
@@ -197,8 +201,8 @@ class EpisodeRepository:
                     page=sp.page,
                     historiographic_school=sp.historiographic_school,
                 )
-                for sp in (orm.source_passages or [])
-            ],
+                for sp in (source_passages or [])
+            ] if source_passages is not None else [],
             extracted_from=orm.extracted_from,
             created_at=orm.created_at,
             updated_at=orm.updated_at,
