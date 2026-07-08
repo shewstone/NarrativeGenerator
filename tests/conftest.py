@@ -14,8 +14,10 @@ from narrative_engine.storage.config import DatabaseConfig
 
 
 # Use test database URL from environment or default
+# CI PostgreSQL service uses postgres/postgres@localhost:5432
 TEST_DATABASE_URL = os.getenv(
-    "TEST_DATABASE_URL", "postgresql+asyncpg://localhost:5432/narrative_engine_test"
+    "TEST_DATABASE_URL",
+    "postgresql+asyncpg://postgres:postgres@localhost:5432/narrative_engine_test"
 )
 
 
