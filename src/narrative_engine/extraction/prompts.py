@@ -20,7 +20,7 @@ def get_segmentation_prompt(text: str) -> str:
 
     Stage 1: Split text into discrete narrative units (episodes).
     """
-    return f"""You are a historical narrative analyzer. Your task is to identify distinct episodes (bounded narrative units) in the provided text.
+    return f"""You are a historical narrative analyzer. Your task is to identify distinct episodes (bounded narrative units) in the provided text.  # noqa: E501
 
 An **episode** is a self-contained historical situation with:
 - A clear beginning (initiating conditions)

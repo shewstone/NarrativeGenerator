@@ -87,6 +87,8 @@ target-version = ["py310", "py311", "py312"]
 [tool.ruff]
 line-length = 120
 target-version = "py310"
+
+[tool.ruff.lint]
 select = [
     "E",   # pycodestyle errors
     "F",   # Pyflakes
@@ -102,6 +104,9 @@ ignore = [
     "UP035",  # Use dict instead of Dict (deferred)
     "UP007",  # Use X | Y instead of Union (deferred)
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"src/narrative_engine/**/*prompts.py" = ["E501"]  # Allow long lines in prompts
 
 [tool.mypy]
 python_version = "3.10"
