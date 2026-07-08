@@ -1,4 +1,5 @@
 name: CI
+
 on:
   push:
     branches: [main, develop]
@@ -15,7 +16,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: |
-          pip install black ruff mypy
+          pip install black==25.1.0 ruff mypy
           black --check --diff src tests
           ruff check src tests
           mypy src/narrative_engine
@@ -30,8 +31,14 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg16
         env:
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ***
           POSTGRES_DB: narrative_engine_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
         ports:
           - 5432:5432
     steps:
@@ -41,4 +48,6 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: |
           pip install -e ".[dev]"
-          pytest -m "not integration" --cov=narrative_engine
+          pytest -m "not integration" -v --tb=short
+        env:
+          TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/narrative_engine_test 
