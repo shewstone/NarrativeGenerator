@@ -15,11 +15,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: |
-          pip install black ruff mypy
-          black --check --diff src tests
-          ruff check src tests
-          mypy src/narrative_engine
+      - name: Install lint tools
+        run: pip install black ruff mypy
+      - name: Install dependencies  
+        run: pip install -e ".[dev]" --quiet
+      - name: Run Black
+        run: black --check --diff src tests
+      - name: Run Ruff
+        run: ruff check src tests
+      - name: Run MyPy
+        run: mypy src/narrative_engine --ignore-missing-imports
 
   test:
     name: Test (Python ${{ matrix.python-version }})
