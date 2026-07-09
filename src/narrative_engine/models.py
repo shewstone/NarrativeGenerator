@@ -332,6 +332,27 @@ class Episode(BaseModel):
         return None  # Placeholder
 
 
+class TransitionTendency(BaseModel):
+    """A historical base rate for one phase transition, optionally
+    conditioned on mechanism presence.
+
+    E.g. "distress -> panic is more frequent when leverage_buildup was
+    tagged in prior phases": base_weight is the unconditioned tendency,
+    conditioned_weight is the tendency when conditioning_mechanisms were
+    present. This is where Turchin-style falsifiable claims ("disintegrative
+    follows elite_overproduction at lag L") live as scoreable data rather
+    than prose.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    from_phase: ArcPhase
+    to_phase: ArcPhase
+    base_weight: float = Field(ge=0.0, le=1.0)
+    conditioning_mechanisms: List[str] = Field(default_factory=list)  # mechanism ids; empty = unconditional
+    conditioned_weight: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
 class ArcDefinition(BaseModel):
     """Definition of an archetypal arc with its phases."""
 
@@ -344,8 +365,11 @@ class ArcDefinition(BaseModel):
     phase_descriptions: Dict[ArcPhase, str] = Field(default_factory=dict)
     typical_duration: Optional[str] = None  # e.g., "2-5 years"
 
-    # Historical base rates: from phase N, what typically follows
-    transition_tendencies: Dict[ArcPhase, Dict[str, Any]] = Field(default_factory=dict)
+    # Historical base rates: from phase N, what typically follows.
+    # list[TransitionTendency], not dict[phase, dict] -- a transition can
+    # carry mechanism-conditioned weights, which a bare dict can't express
+    # without an ad-hoc inner schema (Sec 4).
+    transition_tendencies: List[TransitionTendency] = Field(default_factory=list)
 
 
 class Cycle(BaseModel):

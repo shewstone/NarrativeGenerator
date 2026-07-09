@@ -23,6 +23,7 @@ from narrative_engine.models import (
     ReviewStatus,
     SourcePassage,
     Thesis,
+    TransitionTendency,
 )
 
 
@@ -177,6 +178,34 @@ class TestArcDefinition:
         assert len(arc_def.phases) == 5
         assert arc_def.phases[0] == ArcPhase.BOOM
         assert arc_def.phases[-1] == ArcPhase.REVULSION
+
+    def test_transition_tendencies_is_a_list_not_a_dict(self) -> None:
+        """Sec 4: transition_tendencies is list[TransitionTendency], not
+        the pre-v0.4 dict[phase, dict] shape -- mechanism-conditioned
+        weights need their own fields, not an ad-hoc inner dict."""
+        tendency = TransitionTendency(
+            from_phase=ArcPhase.DISTRESS,
+            to_phase=ArcPhase.PANIC,
+            base_weight=0.4,
+            conditioning_mechanisms=["leverage_buildup"],
+            conditioned_weight=0.75,
+        )
+        arc_def = ArcDefinition(
+            arc_type=ArcType.CREDIT_BOOM_AND_BUST,
+            name="Credit Boom and Bust",
+            description="The Minsky-Kindleberger financial cycle",
+            phases=[ArcPhase.BOOM, ArcPhase.EUPHORIA, ArcPhase.DISTRESS, ArcPhase.PANIC, ArcPhase.REVULSION],
+            transition_tendencies=[tendency],
+        )
+        assert isinstance(arc_def.transition_tendencies, list)
+        assert arc_def.transition_tendencies[0].conditioned_weight == 0.75
+
+    def test_unconditioned_transition_has_empty_mechanism_list(self) -> None:
+        tendency = TransitionTendency(
+            from_phase=ArcPhase.BOOM, to_phase=ArcPhase.EUPHORIA, base_weight=0.6
+        )
+        assert tendency.conditioning_mechanisms == []
+        assert tendency.conditioned_weight is None
 
 
 class TestCycle:
