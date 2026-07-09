@@ -95,6 +95,11 @@ class PromptVersions:
     linking_version: str = "v1.0.0"
 
 
+# Taxonomies are versioned artifacts (design doc Sec 7): re-running with a
+# new version is a batch job, not a rewrite. Single source of truth so a
+# version bump doesn't require hunting down every literal.
+CURRENT_TAXONOMY_VERSION = "arc-v0.1.0"
+
 # Default arc taxonomy for prompts
 DEFAULT_ARC_TAXONOMY = {
     "rise_and_overextension": {

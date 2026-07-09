@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import structlog
 
+from narrative_engine.extraction.config import CURRENT_TAXONOMY_VERSION
 from narrative_engine.models import Continuation, Episode, Thesis, ThesisConfidence
 from narrative_engine.retrieval.analog_retrieval import RetrievedAnalog
 
@@ -111,7 +112,7 @@ class ThesisGenerator:
             watch_conditions=watch_conditions,
             key_uncertainties=uncertainties,
             model_version="thesis-v1.0",
-            taxonomy_version="arc-v0.1.0",
+            taxonomy_version=CURRENT_TAXONOMY_VERSION,
             narrative_synthesis=narrative,
         )
 
@@ -404,6 +405,6 @@ class ThesisGenerator:
             watch_conditions=[],
             key_uncertainties=["Insufficient historical analogs for reliable forecast"],
             model_version="thesis-v1.0",
-            taxonomy_version="arc-v0.1.0",
+            taxonomy_version=CURRENT_TAXONOMY_VERSION,
             narrative_synthesis=None,
         )
