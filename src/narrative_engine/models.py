@@ -102,16 +102,35 @@ class CycleScale(str, Enum):
     EPISODIC = "episodic"  # individual events
 
 
-class LinkType(str, Enum):
-    """Types of relationships between episodes."""
+class EdgeKind(str, Enum):
+    """Kinds of relationships between episodes.
+    
+    CORRECTION: Separate from link_status (attested vs inferred).
+    Edge kind is orthogonal to evidentiary status.
+    """
 
-    ATTESTED = "attested"  # Explicit cross-reference in source text
-    INFERRED = "inferred"  # Structural similarity (no explicit reference)
-    CAUSAL = "causal"  # Causal relationship (precedes/causes)
+    CAUSES = "causes"  # Causal relationship
+    PRECEDES = "precedes"  # Temporal precedence
+    COMPOSES = "composes"  # Part of arc instance
+    MEMBER_OF = "member_of"  # Part of cycle
+    SAME_EVENT_AS = "same_event_as"  # Identity (surface embedding match)
+
+
+class LinkStatus(str, Enum):
+    """Evidentiary status of a link.
+    
+    Invariant: CAUSES edges must be ATTESTED (no inferred causal claims).
+    """
+
+    ATTESTED = "attested"  # Backed by textual evidence spans
+    INFERRED = "inferred"  # Created by composition pass on structural grounds
 
 
 class ReviewStatus(str, Enum):
-    """Review status for inferred links."""
+    """Review state for inferred links.
+    
+    Inferred links above threshold go to human review queue.
+    """
 
     PENDING = "pending"
     APPROVED = "approved"
@@ -168,9 +187,10 @@ class Episode(BaseModel):
     end_date: Optional[datetime] = None
     date_precision: str = "year"  # year, month, day
 
-    # Setting
+    # Setting and scope (CORRECTION: scope is primary partition key)
     location: Optional[str] = None
     setting_description: Optional[str] = None
+    scope_id: Optional[str] = None  # polity/institution scope, e.g., "us_national"
 
     # Narrative structure
     actors: List[Actor] = Field(default_factory=list)

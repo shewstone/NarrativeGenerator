@@ -46,7 +46,8 @@ def upgrade() -> None:
         sa.Column('id', sa.UUID(), nullable=False),
         sa.Column('source_episode_id', sa.UUID(), nullable=False),
         sa.Column('target_episode_id', sa.UUID(), nullable=False),
-        sa.Column('link_type', sa.String(length=50), nullable=False),  # attested, inferred, causal
+        sa.Column('edge_kind', sa.String(length=50), nullable=False),  # CAUSES, PRECEDES, COMPOSES, MEMBER_OF, SAME_EVENT_AS
+        sa.Column('link_status', sa.String(length=50), nullable=False, server_default='attested'),  # attested | inferred
         sa.Column('distance', sa.Float(), nullable=True),  # semantic distance for inferred links
         sa.Column('evidence', sa.Text(), nullable=True),  # quote for attested, similarity score for inferred
         sa.Column('review_status', sa.String(length=50), nullable=False, server_default='pending'),
@@ -56,11 +57,14 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(['source_episode_id'], ['episodes.id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['target_episode_id'], ['episodes.id'], ondelete='CASCADE'),
         sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('source_episode_id', 'target_episode_id', 'link_type', name='uq_episode_link')
+        sa.UniqueConstraint('source_episode_id', 'target_episode_id', 'edge_kind', name='uq_episode_link'),
+        # Invariant: CAUSES edges must be attested (no inferred causal claims)
+        sa.CheckConstraint("NOT (edge_kind = 'CAUSES' AND link_status = 'inferred')", name='chk_causal_must_be_attested')
     )
     op.create_index('ix_episode_links_source', 'episode_links', ['source_episode_id'])
     op.create_index('ix_episode_links_target', 'episode_links', ['target_episode_id'])
-    op.create_index('ix_episode_links_type', 'episode_links', ['link_type'])
+    op.create_index('ix_episode_links_edge_kind', 'episode_links', ['edge_kind'])
+    op.create_index('ix_episode_links_link_status', 'episode_links', ['link_status'])
     op.create_index('ix_episode_links_review_status', 'episode_links', ['review_status'])
 
     # Create arc_instance_episodes association table
