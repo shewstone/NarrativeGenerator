@@ -224,6 +224,13 @@ class EpisodeORM(Base):
     phase_confidence: Mapped[float] = mapped_column(Float, default=0.0)
     arc_rationale: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     secondary_arcs: Mapped[list] = mapped_column(JSON, default=list)  # List of tuples
+    # tau_class outcome (Sec 6.2 stage 4): "unclassified" episodes carry no
+    # arc assignment and are excluded from the arc-conditioned analog base.
+    # Plain string (not a PG enum) so vocabulary changes don't need a type
+    # migration; values come from models.ClassificationState.
+    classification_state: Mapped[str] = mapped_column(
+        String(20), default="classified", nullable=False
+    )
 
     # Metadata
     created_at: Mapped[datetime] = mapped_column(
@@ -280,6 +287,7 @@ class EpisodeORM(Base):
         Index("ix_episodes_arc_phase", "arc_phase"),
         Index("ix_episodes_start_date", "start_date"),
         Index("ix_episodes_scope_id", "scope_id"),
+        Index("ix_episodes_classification_state", "classification_state"),
         Index(
             "ix_episodes_structural_embedding",
             "structural_embedding",
@@ -392,6 +400,13 @@ class ThesisORM(Base):
     resolution_outcome: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     brier_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
+    # Forecast mode (Sec 6.5.8): "arc_based" | "arc_less". Plain string for
+    # the same reason as episodes.classification_state; values come from
+    # models.ThesisMode. Arc-less theses are scored separately in the
+    # harness -- they measure what the arc machinery adds over bare
+    # structural similarity.
+    mode: Mapped[str] = mapped_column(String(20), default="arc_based", nullable=False)
+
     # Metadata
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -405,6 +420,7 @@ class ThesisORM(Base):
     __table_args__ = (
         Index("ix_theses_resolved", "resolved"),
         Index("ix_theses_created_at", "created_at"),
+        Index("ix_theses_mode", "mode"),
     )
 
     def __repr__(self) -> str:

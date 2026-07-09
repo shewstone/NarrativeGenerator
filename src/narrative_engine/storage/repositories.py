@@ -147,6 +147,7 @@ class EpisodeRepository:
         self,
         embedding: List[float],
         limit: int = 10,
+        include_unclassified: bool = False,
     ) -> Sequence[tuple[Episode, float]]:
         """Semantic search using vector similarity.
 
@@ -154,18 +155,24 @@ class EpisodeRepository:
         surface_embedding (design doc Sec 3.3a). Identity resolution
         (composition, SAME_EVENT_AS) does its own surface-embedding
         comparison in-process rather than going through this method.
+
+        Unclassified episodes (failed tau_class, Sec 6.2 stage 4) are
+        excluded by default: they must stay out of the arc-conditioned
+        analog base. Arc-less retrieval (Sec 6.5.8) passes
+        include_unclassified=True, since bare structural nearest-neighbor
+        matching doesn't condition on arc labels at all.
         """
         from pgvector.sqlalchemy import cosine_distance
 
-        result = await self.session.execute(
-            select(
-                EpisodeORM,
-                cosine_distance(EpisodeORM.structural_embedding, embedding).label("distance"),
-            )
-            .where(EpisodeORM.structural_embedding.is_not(None))
-            .order_by("distance")
-            .limit(limit)
-        )
+        query = select(
+            EpisodeORM,
+            cosine_distance(EpisodeORM.structural_embedding, embedding).label("distance"),
+        ).where(EpisodeORM.structural_embedding.is_not(None))
+
+        if not include_unclassified:
+            query = query.where(EpisodeORM.classification_state != "unclassified")
+
+        result = await self.session.execute(query.order_by("distance").limit(limit))
 
         return [(self._from_orm(row.EpisodeORM), float(row.distance)) for row in result.all()]
 
@@ -197,6 +204,7 @@ class EpisodeRepository:
             phase_confidence=episode.phase_confidence,
             arc_rationale=episode.arc_rationale,
             secondary_arcs=episode.secondary_arcs,
+            classification_state=episode.classification_state.value,
             extracted_from=episode.extracted_from,
             version=episode.version,
             surface_embedding=episode.surface_embedding,
@@ -249,6 +257,7 @@ class EpisodeRepository:
             phase_confidence=orm.phase_confidence,
             arc_rationale=orm.arc_rationale,
             secondary_arcs=orm.secondary_arcs,
+            classification_state=orm.classification_state,
             source_passages=[
                 SourcePassage(
                     work_id=sp.work_id,
@@ -289,6 +298,7 @@ class EpisodeRepository:
         orm.phase_confidence = episode.phase_confidence
         orm.arc_rationale = episode.arc_rationale
         orm.secondary_arcs = episode.secondary_arcs
+        orm.classification_state = episode.classification_state.value
         orm.surface_embedding = episode.surface_embedding
         orm.structural_embedding = episode.structural_embedding
         orm.version = episode.version + 1
@@ -402,6 +412,7 @@ class ThesisRepository:
             estimated_duration=thesis.estimated_duration,
             resolution_criteria=thesis.resolution_criteria,
             cited_episodes=thesis.cited_episodes,
+            mode=thesis.mode.value,
             model_version=thesis.model_version,
             taxonomy_version=thesis.taxonomy_version,
         )
@@ -481,6 +492,7 @@ class ThesisRepository:
             resolution_date=orm.resolution_date,
             resolution_outcome=orm.resolution_outcome,
             brier_score=orm.brier_score,
+            mode=orm.mode,
             created_at=orm.created_at,
             model_version=orm.model_version,
             taxonomy_version=orm.taxonomy_version,

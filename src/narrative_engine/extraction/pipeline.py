@@ -11,7 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from narrative_engine.extraction.client import ExtractionPipeline
 from narrative_engine.extraction.config import ExtractionPipelineConfig
-from narrative_engine.models import Actor, ArcPhase, ArcType, Episode, MechanismTag
+from narrative_engine.models import (
+    Actor,
+    ArcPhase,
+    ArcType,
+    ClassificationState,
+    Episode,
+    MechanismTag,
+)
 from narrative_engine.storage.repositories import (
     RepositoryFactory,
 )
@@ -224,8 +231,36 @@ class ExtractionOrchestrator:
             with suppress(ValueError):
                 episode.mechanism_tags.append(MechanismTag(tag))
 
+        # tau_class floor (design doc Sec 6.2 stage 4): classification is
+        # NOT a forced choice. If the best canonical arc doesn't clear the
+        # floor -- or the LLM produced no usable label at all -- the episode
+        # carries no arc assignment rather than its least-bad label.
+        # Secondary arcs are dropped too: they rank below the primary, so
+        # they cannot clear a floor the primary failed. Confidence and
+        # rationale are kept for audit; unclassified episodes are excluded
+        # from the arc-conditioned analog base (repositories.
+        # search_by_embedding) and feed the discovery trigger (Sec 3.4)
+        # when that lands.
+        floor = self.config.classification_confidence_floor
+        if episode.arc_type is None or episode.phase_confidence < floor:
+            if episode.arc_type is not None:
+                self.logger.info(
+                    "Episode failed tau_class floor; marking unclassified",
+                    arc_type=episode.arc_type.value,
+                    confidence=episode.phase_confidence,
+                    floor=floor,
+                )
+            episode.arc_type = None
+            episode.arc_phase = None
+            episode.secondary_arcs = []
+            episode.classification_state = ClassificationState.UNCLASSIFIED
+        else:
+            episode.classification_state = ClassificationState.CLASSIFIED
+
         # TODO: Second-pass classification with nearest neighbors
-        # Requires vector search for similar episodes
+        # Requires vector search for similar episodes. NOTE (Sec 6.2 stage
+        # 4): when this lands, unclassified episodes must be excluded from
+        # the neighbor pool so low-confidence labels never propagate.
 
     async def _parse_dates(
         self,

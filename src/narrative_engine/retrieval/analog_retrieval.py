@@ -10,7 +10,14 @@ from uuid import UUID
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from narrative_engine.models import ArcPhase, ArcType, CycleScale, Episode, MechanismTag
+from narrative_engine.models import (
+    ArcPhase,
+    ArcType,
+    ClassificationState,
+    CycleScale,
+    Episode,
+    MechanismTag,
+)
 from narrative_engine.retrieval.embeddings import EmbeddingGenerator
 from narrative_engine.storage.repositories import CycleRepository, EpisodeRepository
 
@@ -71,6 +78,22 @@ class AnalogRetrievalEngine:
             k=k,
         )
 
+        # Arc-less fallback (Sec 6.5.8): if the query situation itself has no
+        # arc (failed tau_class), there is no phase and no phase-completion
+        # forecast -- retrieval degrades to bare structural nearest-neighbor
+        # matching. Unclassified corpus episodes are admissible analogs in
+        # this mode (nothing conditions on arc labels); in arc-based mode
+        # they are excluded from the analog base entirely.
+        arc_less = (
+            query_episode.arc_type is None
+            or query_episode.classification_state == ClassificationState.UNCLASSIFIED
+        )
+        if arc_less:
+            self.logger.info(
+                "Query is unclassified; retrieval degrading to arc-less mode",
+                query_title=query_episode.title,
+            )
+
         # Step 1: Generate query embedding (structural -- analogy signal, Sec 3.3a)
         query_embedding = self.embedding_generator.generate_structural_embedding(query_episode)
 
@@ -81,6 +104,7 @@ class AnalogRetrievalEngine:
         candidates = await episode_repo.search_by_embedding(
             query_embedding,
             limit=k * 3,  # Get extra for filtering
+            include_unclassified=arc_less,
         )
 
         self.logger.info(f"Vector search returned {len(candidates)} candidates")
@@ -88,7 +112,13 @@ class AnalogRetrievalEngine:
         # Step 3: Score and rank candidates
         scored_analogs: List[RetrievedAnalog] = []
 
-        for episode, vector_sim in candidates:
+        for episode, distance in candidates:
+            # search_by_embedding returns cosine DISTANCE (0 = identical);
+            # convert to similarity before thresholding -- filtering the raw
+            # distance against min_similarity kept the most dissimilar
+            # candidates and dropped the best ones.
+            vector_sim = 1.0 - distance
+
             # Skip if below minimum similarity
             if vector_sim < min_similarity:
                 continue
@@ -102,6 +132,7 @@ class AnalogRetrievalEngine:
                 candidate=episode,
                 vector_similarity=vector_sim,
                 session=session,
+                arc_less=arc_less,
             )
 
             scored_analogs.append(analog)
@@ -123,8 +154,16 @@ class AnalogRetrievalEngine:
         candidate: Episode,
         vector_similarity: float,
         session: AsyncSession,
+        arc_less: bool = False,
     ) -> RetrievedAnalog:
-        """Score a candidate analog across multiple dimensions."""
+        """Score a candidate analog across multiple dimensions.
+
+        In arc-less mode (Sec 6.5.8) the query has no arc/phase, so the
+        arc, phase, and mechanism components have nothing to condition on:
+        combined_score is bare structural similarity with cycle context as
+        soft context, and the component scores are recorded for
+        transparency but carry no weight.
+        """
 
         # Arc type match
         arc_match = self._compute_arc_match(
@@ -153,20 +192,31 @@ class AnalogRetrievalEngine:
             candidate.mechanism_tags,
         )
 
-        # Combined score (weighted)
-        combined = (
-            self.vector_weight * vector_similarity
-            + self.arc_weight * arc_match
-            + self.phase_weight * phase_compat
-            + self.cycle_weight * cycle_score
-            + self.mechanism_weight * mechanism_score
-        )
+        if arc_less:
+            # Bare structural nearest-neighbor with cycle-state as soft
+            # context only; weights renormalized over the two live signals.
+            live_weight = self.vector_weight + self.cycle_weight
+            combined = (
+                self.vector_weight * vector_similarity
+                + self.cycle_weight * cycle_score
+            ) / live_weight
+        else:
+            # Combined score (weighted)
+            combined = (
+                self.vector_weight * vector_similarity
+                + self.arc_weight * arc_match
+                + self.phase_weight * phase_compat
+                + self.cycle_weight * cycle_score
+                + self.mechanism_weight * mechanism_score
+            )
 
         # Generate reasoning
         reasoning_parts = []
-        if arc_match > 0.8:
+        if arc_less:
+            reasoning_parts.append("Arc-less structural match (query unclassified)")
+        if not arc_less and arc_match > 0.8 and candidate.arc_type:
             reasoning_parts.append(f"Same arc type: {candidate.arc_type.value}")
-        if phase_compat > 0.8:
+        if not arc_less and phase_compat > 0.8 and candidate.arc_phase:
             reasoning_parts.append(f"Similar phase: {candidate.arc_phase.value}")
         if vector_similarity > 0.85:
             reasoning_parts.append("High semantic similarity")
@@ -186,7 +236,7 @@ class AnalogRetrievalEngine:
             cycle_context_score=cycle_score,
             mechanism_match_score=mechanism_score,
             combined_score=combined,
-            retrieval_method="hybrid",
+            retrieval_method="vector_arc_less" if arc_less else "hybrid",
             reasoning=reasoning,
         )
 

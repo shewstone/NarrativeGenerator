@@ -220,10 +220,19 @@ def compose_arc_instances_from_episodes(
     relevant = [e for e in episodes if e.arc_type == arc_type and e.start_date]
 
     # Stage 1: hard filter -- partition by scope_id. Episodes in different
-    # scopes are never compared, by construction.
-    by_scope: Dict[Optional[str], List[Episode]] = {}
+    # scopes are never compared, by construction. Episodes with NO scope are
+    # excluded from merging entirely (each becomes its own singleton
+    # partition): pooling them together would put, say, an unscoped Japanese
+    # and an unscoped US credit boom in the same candidate pool -- exactly
+    # the false-merge class the scope partition exists to eliminate. They
+    # still surface as size-1 instances rather than being silently dropped.
+    by_scope: Dict[str, List[Episode]] = {}
+    unscoped: List[Episode] = []
     for episode in relevant:
-        by_scope.setdefault(episode.scope_id, []).append(episode)
+        if episode.scope_id is None:
+            unscoped.append(episode)
+        else:
+            by_scope.setdefault(episode.scope_id, []).append(episode)
 
     instances: List[ArcInstance] = []
     for scope_episodes in by_scope.values():
@@ -232,6 +241,11 @@ def compose_arc_instances_from_episodes(
             instance = _build_instance_from_cluster(arc_type, cluster, expected_phases)
             if instance:
                 instances.append(instance)
+
+    for episode in unscoped:
+        instance = _build_instance_from_cluster(arc_type, [episode], expected_phases)
+        if instance:
+            instances.append(instance)
 
     return instances
 
@@ -403,11 +417,19 @@ class CompositionPipeline:
         if not instance.start_date or not instance.end_date:
             return []
 
+        # Scope is the stage-1 hard filter (Sec 6.2 stage 6 item 1) and gap
+        # filling is still an identity decision, so it applies here too: an
+        # instance without a scope cannot safely pull episodes from anywhere,
+        # and a scoped instance may only pull from its own scope.
+        if instance.scope_id is None:
+            return []
+
         # Look for episodes of the same arc type, in the time window
         buffer = timedelta(days=365 * 2)  # 2 year buffer
 
         result = await self.session.execute(
             select(EpisodeORM)
+            .where(EpisodeORM.scope_id == instance.scope_id)
             .where(EpisodeORM.arc_type == instance.arc_type)
             .where(EpisodeORM.arc_phase == phase)
             .where(EpisodeORM.start_date >= instance.start_date - buffer)

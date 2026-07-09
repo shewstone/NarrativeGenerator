@@ -52,9 +52,9 @@ class EmbeddingGenerator:
 
     def render_structural_template(self, episode: Episode) -> str:
         """Deterministically render the episode's abstract narrative shape
-        (design doc Sec 3.3): arc type, phase, actor roles (not names), and
-        the sequence of conditions/mechanics/tension/resolution -- never
-        raw title/summary text, actor names, location, or dates.
+        (design doc Sec 3.3): arc type, phase, actor roles (not names),
+        mechanism tags, and the sequence of conditions/mechanics/tension --
+        never raw title/summary text, actor names, location, or dates.
 
         This is what makes the structural embedding place/date-blind (so
         Athens-Sparta can embed near Wilhelmine Germany-Britain): title and
@@ -62,6 +62,18 @@ class EmbeddingGenerator:
         happening, and actor names are proper nouns, so including either
         re-introduces the exact identity signal the structural/surface
         split (Sec 3.3a) exists to keep separate.
+
+        Outcome fields (resolution, consequences) are ALWAYS excluded, for
+        two reasons. (1) Query/corpus symmetry: a present-day query episode
+        has resolution=None by definition, so embedding outcomes for corpus
+        episodes but not queries makes every retrieval score systematically
+        biased by a field only one side has. (2) Leakage: retrieval is
+        "given the situation so far, what followed?" -- if the embedding
+        encodes how the story ended, backtests partially retrieve analogs
+        BY their endings, which is the masking failure Sec 6.6 exists to
+        prevent. Outcomes still reach theses via the analogs' stored
+        resolution/consequences fields after retrieval (Sec 6.5 step 5);
+        they just never enter the similarity signal.
         """
         lines: List[str] = []
 
@@ -81,6 +93,13 @@ class EmbeddingGenerator:
                     roles.append(actor.role)
             lines.append(f"Actor roles: {', '.join(roles)}")
 
+        if episode.mechanism_tags:
+            # Sec 3.3 template's MECHANISMS line: controlled-vocabulary
+            # structural drivers, serialized in tag order.
+            lines.append(
+                f"Mechanisms: {', '.join(tag.value for tag in episode.mechanism_tags)}"
+            )
+
         if episode.initiating_conditions:
             lines.append("Initiating conditions:")
             lines.extend(f"- {c}" for c in episode.initiating_conditions)
@@ -91,13 +110,6 @@ class EmbeddingGenerator:
 
         if episode.tension:
             lines.append(f"Tension: {episode.tension}")
-
-        if episode.resolution:
-            lines.append(f"Resolution: {episode.resolution}")
-
-        if episode.consequences:
-            lines.append("Consequences:")
-            lines.extend(f"- {c}" for c in episode.consequences)
 
         return "\n".join(lines)
 

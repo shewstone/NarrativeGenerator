@@ -90,6 +90,7 @@ class ArcIdentityResolver:
         match_threshold: float = 0.70,
         high_confidence_threshold: float = 0.85,
         actor_overlap_threshold: float = 0.1,
+        min_evidence_signals: int = 2,
     ):
         # CORRECTION: Thresholds are hypotheses - tune against composition fixture
         # Starting points (user suggestion): episodic ~1-2y, institutional ~5y,
@@ -111,6 +112,15 @@ class ArcIdentityResolver:
         # Stage 2 hard-ish filter (design doc Sec 6.2 stage 6): actor overlap
         # below this rejects the pair outright, unless neutral (no actor data).
         self.actor_overlap_threshold = actor_overlap_threshold
+        # Evidence floor: every gate treats missing data as a neutral pass
+        # (interim-debt convention), which left the DEGENERATE case open --
+        # an episode pair with no dates, no actors, no embeddings, and no
+        # phases passed every gate, making the worst-documented episodes
+        # the easiest to merge. is_match now additionally requires at least
+        # this many signals computed from data actually present on both
+        # sides. Identity is an evidence claim; absence of evidence must
+        # not behave like weak evidence for it.
+        self.min_evidence_signals = min_evidence_signals
 
     def calculate_identity_score(
         self,
@@ -194,6 +204,25 @@ class ArcIdentityResolver:
         # overflow allowance) -- a hard reject, not just a low score.
         temporal_gate = temporal_score > 0.0
 
+        # Evidence floor: count signals computed from data present on BOTH
+        # sides (as opposed to neutral 0.5 defaults for missing data).
+        temporal_concrete = bool(episode_a.end_date and episode_b.start_date)
+        actor_concrete = bool(episode_a.actors and episode_b.actors)
+        surface_concrete = (
+            episode_a.surface_embedding is not None
+            and episode_b.surface_embedding is not None
+        )
+        phase_concrete = bool(episode_a.arc_phase and episode_b.arc_phase)
+        evidence_signals = sum(
+            [temporal_concrete, actor_concrete, surface_concrete, phase_concrete]
+        )
+        evidence_gate = evidence_signals >= self.min_evidence_signals
+        if not evidence_gate:
+            mismatch_reasons.append(
+                f"Insufficient identity evidence ({evidence_signals} concrete "
+                f"signals < {self.min_evidence_signals} required)"
+            )
+
         # Calculate weighted composite score
         # CORRECTION: No location weight, added surface embedding
         overall_score = (
@@ -209,8 +238,12 @@ class ArcIdentityResolver:
         )
 
         # Stage 6 identity decision: hard cascade, not overall_score vs.
-        # threshold. All four gates must pass.
-        is_match = actor_gate and temporal_gate and arc_type_gate and phase_gate
+        # threshold. All four gates must pass, AND enough of them must be
+        # grounded in actual data (evidence floor above) -- gates that all
+        # passed by neutral default are not an identity finding.
+        is_match = (
+            actor_gate and temporal_gate and arc_type_gate and phase_gate and evidence_gate
+        )
 
         return IdentityScore(
             scope_match=scope_match,

@@ -10,7 +10,14 @@ from uuid import uuid4
 import structlog
 
 from narrative_engine.extraction.config import CURRENT_TAXONOMY_VERSION
-from narrative_engine.models import Continuation, Episode, Thesis, ThesisConfidence
+from narrative_engine.models import (
+    ClassificationState,
+    Continuation,
+    Episode,
+    Thesis,
+    ThesisConfidence,
+    ThesisMode,
+)
 from narrative_engine.retrieval.analog_retrieval import RetrievedAnalog
 
 logger = structlog.get_logger()
@@ -71,15 +78,22 @@ class ThesisGenerator:
             analogs=len(analogs),
         )
 
+        # Arc-less degraded mode (Sec 6.5.8): the query situation failed the
+        # classification floor, so there is no phase and no phase-completion
+        # forecast. The thesis is still emitted -- silent failure and silent
+        # shoehorning are both prohibited -- but visibly degraded: wider
+        # stated uncertainty, no arc-conditioned probability weights.
+        mode = self._determine_mode(query_episode)
+
         # Filter and rank analogs
         filtered = self._filter_analogs(analogs)
 
         if len(filtered) < self.min_analogs:
             self.logger.warning(f"Insufficient analogs ({len(filtered)} < {self.min_analogs})")
-            return self._create_uncertain_thesis(query_episode, filtered)
+            return self._create_uncertain_thesis(query_episode, filtered, mode)
 
         # Extract continuations from analogs
-        evidence = self._extract_evidence(filtered)
+        evidence = self._extract_evidence(filtered, mode)
 
         # Generate alternative futures (continuations)
         continuations = self._generate_continuations(evidence)
@@ -87,11 +101,26 @@ class ThesisGenerator:
         # Calculate confidence
         confidence = self._calculate_confidence(evidence, continuations)
 
+        # Arc-less theses cap at LOW: branch frequencies rest on bare
+        # structural similarity with no phase-conditioned transition
+        # statistics behind them (Sec 6.5.8, "wider stated uncertainty").
+        if mode == ThesisMode.ARC_LESS and confidence in (
+            ThesisConfidence.HIGH,
+            ThesisConfidence.MEDIUM,
+        ):
+            confidence = ThesisConfidence.LOW
+
         # Generate watch conditions
         watch_conditions = self._generate_watch_conditions(evidence)
 
         # Generate key uncertainties
         uncertainties = self._identify_uncertainties(evidence)
+        if mode == ThesisMode.ARC_LESS:
+            uncertainties.insert(
+                0,
+                "Situation fits no known arc (unclassified): forecast rests on "
+                "structural similarity only, with no phase-completion statistics",
+            )
 
         # Generate narrative synthesis (optional LLM enhancement)
         narrative = self._generate_narrative(
@@ -113,6 +142,7 @@ class ThesisGenerator:
             confidence=confidence,
             watch_for_indicators=watch_conditions,
             key_uncertainties=uncertainties,
+            mode=mode,
             model_version="thesis-v1.0",
             taxonomy_version=CURRENT_TAXONOMY_VERSION,
             narrative_synthesis=narrative,
@@ -126,6 +156,16 @@ class ThesisGenerator:
         )
 
         return thesis
+
+    def _determine_mode(self, query_episode: Episode) -> ThesisMode:
+        """Arc-less iff the query situation carries no arc (failed tau_class
+        or was never classified) -- Sec 6.5.8."""
+        if (
+            query_episode.arc_type is None
+            or query_episode.classification_state == ClassificationState.UNCLASSIFIED
+        ):
+            return ThesisMode.ARC_LESS
+        return ThesisMode.ARC_BASED
 
     def _filter_analogs(
         self,
@@ -147,8 +187,15 @@ class ThesisGenerator:
     def _extract_evidence(
         self,
         analogs: List[RetrievedAnalog],
+        mode: ThesisMode = ThesisMode.ARC_BASED,
     ) -> List[AnalogEvidence]:
-        """Extract evidence from filtered analogs."""
+        """Extract evidence from filtered analogs.
+
+        In arc-less mode the query has no arc, so arc_match_score has
+        nothing to condition on -- weighting by it would zero out every
+        analog. Weights fall back to bare semantic similarity (Sec 6.5.8:
+        no arc-conditioned branch weights).
+        """
         evidence = []
 
         for analog in analogs:
@@ -156,12 +203,17 @@ class ThesisGenerator:
             continuation = self._extract_continuation(analog.episode)
 
             if continuation:
+                weight = (
+                    analog.semantic_similarity
+                    if mode == ThesisMode.ARC_LESS
+                    else analog.semantic_similarity * analog.arc_match_score
+                )
                 evidence.append(
                     AnalogEvidence(
                         analog=analog,
                         relevance_score=analog.combined_score,
                         continuation=continuation,
-                        probability_weight=analog.semantic_similarity * analog.arc_match_score,
+                        probability_weight=weight,
                     )
                 )
 
@@ -401,8 +453,16 @@ class ThesisGenerator:
         self,
         query_episode: Episode,
         analogs: List[RetrievedAnalog],
+        mode: ThesisMode = ThesisMode.ARC_BASED,
     ) -> Thesis:
         """Create thesis when insufficient analogs available."""
+        uncertainties = ["Insufficient historical analogs for reliable forecast"]
+        if mode == ThesisMode.ARC_LESS:
+            uncertainties.insert(
+                0,
+                "Situation fits no known arc (unclassified): forecast rests on "
+                "structural similarity only, with no phase-completion statistics",
+            )
         return Thesis(
             id=uuid4(),
             query=self._formulate_query(query_episode),
@@ -413,7 +473,8 @@ class ThesisGenerator:
             alternative_continuations=[],
             confidence=ThesisConfidence.UNKNOWN,
             watch_for_indicators=[],
-            key_uncertainties=["Insufficient historical analogs for reliable forecast"],
+            key_uncertainties=uncertainties,
+            mode=mode,
             model_version="thesis-v1.0",
             taxonomy_version=CURRENT_TAXONOMY_VERSION,
             narrative_synthesis=None,

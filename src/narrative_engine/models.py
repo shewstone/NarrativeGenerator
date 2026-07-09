@@ -93,6 +93,35 @@ class MechanismTag(str, Enum):
     REFORM_RESISTANCE = "reform_resistance"
 
 
+class ClassificationState(str, Enum):
+    """Whether an episode cleared the classification confidence floor.
+
+    Classification is never a forced choice (design doc Sec 6.2 stage 4):
+    if no canonical arc clears tau_class, the episode carries NO arc
+    assignment and is marked UNCLASSIFIED rather than shoehorned into its
+    least-bad label. Unclassified episodes stay out of the arc-conditioned
+    analog base (Sec 6.5) and are re-attempted on taxonomy version bumps.
+    """
+
+    CLASSIFIED = "classified"
+    UNCLASSIFIED = "unclassified"
+
+
+class ThesisMode(str, Enum):
+    """Forecast mode (design doc Sec 6.5.8).
+
+    ARC_LESS is the visible degraded path: the query situation itself
+    failed the classification floor, so there is no phase and no
+    phase-completion forecast -- only bare structural nearest-neighbor
+    retrieval with wider stated uncertainty. Silent shoehorning and silent
+    failure are both prohibited; a visible degraded answer is the honest
+    outcome.
+    """
+
+    ARC_BASED = "arc_based"
+    ARC_LESS = "arc_less"
+
+
 class CycleScale(str, Enum):
     """Fractal cycle scales."""
 
@@ -293,11 +322,14 @@ class Episode(BaseModel):
     # alongside arc_type/arc_phase (same analytical-judgment stage).
     mechanism_tags: List[MechanismTag] = Field(default_factory=list)
 
-    # Arc classification
+    # Arc classification. arc_type/arc_phase are None when the episode is
+    # UNCLASSIFIED (no forced choice -- see ClassificationState); confidence
+    # and rationale are kept even then, for audit.
     arc_type: Optional[ArcType] = None
     arc_phase: Optional[ArcPhase] = None
     phase_confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     arc_rationale: Optional[str] = None
+    classification_state: ClassificationState = ClassificationState.CLASSIFIED
 
     # Multi-label support: episodes can instantiate multiple arcs
     secondary_arcs: List[tuple[ArcType, ArcPhase, float]] = Field(default_factory=list)
@@ -464,6 +496,10 @@ class Thesis(BaseModel):
     resolution_date: Optional[datetime] = None
     resolution_outcome: Optional[str] = None  # "accurate", "partial", "miss"
     brier_score: Optional[float] = None
+
+    # Forecast mode (Sec 6.5.8): arc_less when the query situation failed
+    # the classification floor -- no phase, so no phase-completion forecast.
+    mode: ThesisMode = ThesisMode.ARC_BASED
 
     # Metadata
     created_at: datetime = Field(default_factory=datetime.utcnow)

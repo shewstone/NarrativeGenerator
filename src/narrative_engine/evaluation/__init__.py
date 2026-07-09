@@ -7,6 +7,15 @@ from narrative_engine.evaluation.backtest import (
     BacktestEngine,
     HistoricalDataset,
 )
+from narrative_engine.evaluation.baselines import (
+    BareLLMBaseline,
+    BaselinePrediction,
+    PersistenceBaseline,
+)
+from narrative_engine.evaluation.masking import (
+    mask_corpus_at,
+    mask_episode_at,
+)
 from narrative_engine.evaluation.metrics import (
     BrierScore,
     CalibrationAnalyzer,
@@ -15,6 +24,11 @@ from narrative_engine.evaluation.metrics import (
 __all__ = [
     "BacktestEngine",
     "HistoricalDataset",
+    "BareLLMBaseline",
+    "BaselinePrediction",
+    "PersistenceBaseline",
+    "mask_corpus_at",
+    "mask_episode_at",
     "BrierScore",
     "CalibrationAnalyzer",
 ]

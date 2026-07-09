@@ -62,6 +62,12 @@ class ExtractionPipelineConfig:
     # Classification settings
     classification_temperature: float = 0.0
     two_pass_classification: bool = True
+    # tau_class (design doc Sec 6.2 stage 4): classification is not a forced
+    # choice. If no canonical arc clears this confidence floor, the episode
+    # gets NO arc assignment and classification_state="unclassified".
+    # UNTUNED HYPOTHESIS: tune against the analog fixture, not intuition
+    # (Sec 9) -- too low pollutes the analog base, too high starves it.
+    classification_confidence_floor: float = 0.5
 
     # Entity resolution settings
     similarity_threshold: float = 0.85  # For same-event detection
@@ -84,6 +90,7 @@ class ExtractionPipelineConfig:
             linking_model=os.getenv(f"{prefix}LINK_MODEL", "gpt-4"),
             chunk_size_tokens=int(os.getenv(f"{prefix}CHUNK_SIZE", "6000")),
             chunk_overlap_tokens=int(os.getenv(f"{prefix}CHUNK_OVERLAP", "500")),
+            classification_confidence_floor=float(os.getenv(f"{prefix}TAU_CLASS", "0.5")),
         )
 
 
