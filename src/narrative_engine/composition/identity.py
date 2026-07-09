@@ -220,15 +220,16 @@ class ArcIdentityResolver:
     
     def _calculate_surface_embedding_similarity(self, a: Episode, b: Episode) -> float:
         """Calculate surface embedding similarity (raw text, NOT structural).
-        
+
         CORRECTION: Uses surface embeddings (raw summaries) for identity.
         Structural embeddings (arc patterns) are for analog retrieval, NOT identity.
+        No fallback to structural_embedding: that fallback was the exact bug
+        v0.5 corrected -- it would happily score identity on the place/date-
+        blind structural signal, merging unrelated same-shaped episodes.
         """
-        # CORRECTION: Surface embeddings = raw text/summary embeddings
-        # These capture "same event" not "same arc pattern"
-        a_surface = getattr(a, 'surface_embedding', None) or getattr(a, 'embedding', None)
-        b_surface = getattr(b, 'surface_embedding', None) or getattr(b, 'embedding', None)
-        
+        a_surface = a.surface_embedding
+        b_surface = b.surface_embedding
+
         if a_surface is None or b_surface is None:
             return 0.5  # Neutral if no surface embeddings
         
@@ -411,6 +412,8 @@ class ArcIdentityResolver:
             arc_phase=orm.arc_phase,
             phase_confidence=orm.phase_confidence,
             extracted_from=orm.extracted_from,
+            surface_embedding=orm.surface_embedding,
+            structural_embedding=orm.structural_embedding,
         )
 
 

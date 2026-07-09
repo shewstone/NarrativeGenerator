@@ -138,12 +138,21 @@ class EpisodeRepository:
         embedding: List[float],
         limit: int = 10,
     ) -> Sequence[tuple[Episode, float]]:
-        """Semantic search using vector similarity."""
+        """Semantic search using vector similarity.
+
+        Analogy retrieval use case only: queries structural_embedding, never
+        surface_embedding (design doc Sec 3.3a). Identity resolution
+        (composition, SAME_EVENT_AS) does its own surface-embedding
+        comparison in-process rather than going through this method.
+        """
         from pgvector.sqlalchemy import cosine_distance
 
         result = await self.session.execute(
-            select(EpisodeORM, cosine_distance(EpisodeORM.embedding, embedding).label("distance"))
-            .where(EpisodeORM.embedding.is_not(None))
+            select(
+                EpisodeORM,
+                cosine_distance(EpisodeORM.structural_embedding, embedding).label("distance"),
+            )
+            .where(EpisodeORM.structural_embedding.is_not(None))
             .order_by("distance")
             .limit(limit)
         )
@@ -179,7 +188,8 @@ class EpisodeRepository:
             secondary_arcs=episode.secondary_arcs,
             extracted_from=episode.extracted_from,
             version=episode.version,
-            embedding=episode.embedding if hasattr(episode, "embedding") else None,
+            surface_embedding=episode.surface_embedding,
+            structural_embedding=episode.structural_embedding,
         )
 
     def _from_orm(self, orm: EpisodeORM) -> Episode:
@@ -243,6 +253,8 @@ class EpisodeRepository:
             created_at=orm.created_at,
             updated_at=orm.updated_at,
             version=orm.version,
+            surface_embedding=orm.surface_embedding,
+            structural_embedding=orm.structural_embedding,
         )
 
     def _update_orm(self, orm: EpisodeORM, episode: Episode) -> None:
@@ -264,6 +276,8 @@ class EpisodeRepository:
         orm.phase_confidence = episode.phase_confidence
         orm.arc_rationale = episode.arc_rationale
         orm.secondary_arcs = episode.secondary_arcs
+        orm.surface_embedding = episode.surface_embedding
+        orm.structural_embedding = episode.structural_embedding
         orm.version = episode.version + 1
 
 

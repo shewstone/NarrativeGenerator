@@ -189,14 +189,13 @@ to identify emergent patterns not captured by canonical taxonomies.
         if not episodes:
             raise ValueError("No episodes provided for clustering")
 
-        # Extract embeddings
+        # Extract embeddings. Discovery clustering is an analogy consumer
+        # (design doc Sec 3.3a): structural_embedding only, never surface.
         embeddings = []
         episode_ids = []
         for ep in episodes:
-            # In real implementation, would get embedding from episode
-            # For now, placeholder
-            if hasattr(ep, "embedding") and ep.embedding:
-                embeddings.append(ep.embedding)
+            if ep.structural_embedding:
+                embeddings.append(ep.structural_embedding)
                 episode_ids.append(ep.id)
 
         if len(embeddings) < min_cluster_size * 2:

@@ -68,8 +68,8 @@ class AnalogRetrievalEngine:
             k=k,
         )
 
-        # Step 1: Generate query embedding
-        query_embedding = self.embedding_generator.generate_for_episode(query_episode)
+        # Step 1: Generate query embedding (structural -- analogy signal, Sec 3.3a)
+        query_embedding = self.embedding_generator.generate_structural_embedding(query_episode)
 
         # Step 2: Vector search for candidates
         episode_repo = EpisodeRepository(session)

@@ -221,6 +221,14 @@ class Episode(BaseModel):
     # Cycle membership
     parent_cycle_ids: Set[UUID] = Field(default_factory=set)
 
+    # Embeddings (CORRECTION v0.5, Sec 3.3a): two distinct roles, never swapped.
+    # surface_embedding = raw title/summary text -> identity ("same happening?"),
+    #   consumed by SAME_EVENT_AS resolution and arc composition.
+    # structural_embedding = role-substituted narrative template -> analogy
+    #   ("same shape?"), consumed by analog retrieval and discovery clustering.
+    surface_embedding: Optional[List[float]] = None
+    structural_embedding: Optional[List[float]] = None
+
     def __hash__(self) -> int:
         return hash(self.id)
 

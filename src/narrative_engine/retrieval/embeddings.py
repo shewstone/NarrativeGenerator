@@ -50,11 +50,19 @@ class EmbeddingGenerator:
         embeddings = self.model.encode(texts, convert_to_numpy=True, batch_size=32)
         return [e.tolist() for e in embeddings]
 
-    def generate_for_episode(self, episode: Episode) -> List[float]:
-        """Generate embedding optimized for episode analog retrieval.
+    def generate_structural_embedding(self, episode: Episode) -> List[float]:
+        """Generate the structural embedding: analogy signal, NOT identity.
 
-        Key insight: Embed the abstract narrative structure, not just raw text.
-        This improves cross-domain analogy matching.
+        Renders the episode's abstract narrative structure -- arc type, phase,
+        actor roles, conditions, escalation, tension -- rather than raw prose.
+        This is what makes cross-domain analogy matching work (Athens-Sparta
+        embeds near Germany-Britain), because it is place/date-blind by
+        design. That same place/date-blindness makes it WRONG for identity
+        resolution ("is this the same happening?") -- use
+        generate_surface_embedding for that (design doc Sec 3.3a).
+
+        Consumers: analog retrieval (AnalogRetrievalEngine), discovery
+        clustering. Never: SAME_EVENT_AS resolution, arc composition.
         """
         # Construct structured representation
         components = [
@@ -86,6 +94,20 @@ class EmbeddingGenerator:
         # Join into single string for embedding
         text = "\n".join(components)
 
+        return self.generate(text)
+
+    def generate_surface_embedding(self, episode: Episode) -> List[float]:
+        """Generate the surface embedding: identity signal, NOT analogy.
+
+        Raw title + summary text only -- no role substitution, no arc/phase
+        labels. Captures "is this the same happening?" (two sources
+        describing the same crash), not "is this the same shape?" (design
+        doc Sec 3.3a).
+
+        Consumers: SAME_EVENT_AS resolution, arc composition. Never: analog
+        retrieval, discovery clustering.
+        """
+        text = f"{episode.title}\n{episode.summary}"
         return self.generate(text)
 
     def generate_for_query(self, query: str) -> List[float]:

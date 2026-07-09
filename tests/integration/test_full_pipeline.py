@@ -67,8 +67,8 @@ async def test_full_pipeline(engine, session):
     # 2. Generate embeddings
     embedder = EmbeddingGenerator()
 
-    embedding_1929 = embedder.generate_for_episode(created_1929)
-    embedding_2008 = embedder.generate_for_episode(created_2008)
+    embedding_1929 = embedder.generate_structural_embedding(created_1929)
+    embedding_2008 = embedder.generate_structural_embedding(created_2008)
 
     assert len(embedding_1929) == 384
     assert len(embedding_2008) == 384
@@ -91,7 +91,7 @@ async def test_full_pipeline(engine, session):
         tension="Market uncertainty",
     )
 
-    query_embedding = embedder.generate_for_episode(query_episode)
+    query_embedding = embedder.generate_structural_embedding(query_episode)
 
     # 4. Retrieve analogs
     await factory.episodes.create(query_episode)

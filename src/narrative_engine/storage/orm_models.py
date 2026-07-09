@@ -188,9 +188,17 @@ class EpisodeORM(Base):
         back_populates="episodes",
     )
 
-    # Vector embedding for semantic search
-    embedding: Mapped[Optional[List[float]]] = mapped_column(
-        Vector(768),  # Using 768-dim for sentence-transformers
+    # Vector embeddings (CORRECTION v0.5, Sec 3.3a): two distinct roles.
+    # surface_embedding = identity signal (SAME_EVENT_AS, composition).
+    # structural_embedding = analogy signal (retrieval, clustering) -- the
+    # only one indexed for ANN search, since it's the only one queried at
+    # retrieval volume.
+    surface_embedding: Mapped[Optional[List[float]]] = mapped_column(
+        Vector(384),
+        nullable=True,
+    )
+    structural_embedding: Mapped[Optional[List[float]]] = mapped_column(
+        Vector(384),
         nullable=True,
     )
 
@@ -200,7 +208,11 @@ class EpisodeORM(Base):
         Index("ix_episodes_arc_phase", "arc_phase"),
         Index("ix_episodes_start_date", "start_date"),
         Index("ix_episodes_scope_id", "scope_id"),
-        Index("ix_episodes_embedding", "embedding", postgresql_using="ivfflat"),
+        Index(
+            "ix_episodes_structural_embedding",
+            "structural_embedding",
+            postgresql_using="ivfflat",
+        ),
     )
 
     def __repr__(self) -> str:
