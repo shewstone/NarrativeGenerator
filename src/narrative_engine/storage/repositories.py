@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
-from narrative_engine.logging_config import get_logger
+from narrative_engine.logging_config import get_logger, LogTimer
 from narrative_engine.models import Actor, Cycle, Episode, Thesis
 from narrative_engine.storage.orm_models import (
     CycleORM,
@@ -28,7 +28,7 @@ class EpisodeRepository:
 
     async def create(self, episode: Episode) -> Episode:
         """Create a new episode."""
-        with LogTimer(logger, "episode_create", episode_id=str(episode.id)):
+        with LogTimer("episode_create", episode_id=str(episode.id)):
             try:
                 orm_episode = self._to_orm(episode)
                 self.session.add(orm_episode)
@@ -46,13 +46,12 @@ class EpisodeRepository:
                     "episode_create_failed",
                     episode_id=str(episode.id),
                     error=str(e),
-                    exc_info=True,
                 )
                 raise
 
     async def get_by_id(self, episode_id: UUID) -> Optional[Episode]:
         """Get episode by ID with all relationships."""
-        with LogTimer(logger, "episode_get_by_id", episode_id=str(episode_id)):
+        with LogTimer("episode_get_by_id", episode_id=str(episode_id)):
             try:
                 result = await self.session.execute(
                     select(EpisodeORM)
@@ -64,24 +63,12 @@ class EpisodeRepository:
                     )
                 )
                 orm_episode = result.scalar_one_or_none()
-                if orm_episode:
-                    logger.debug(
-                        "episode_found",
-                        episode_id=str(episode_id),
-                        title=orm_episode.title,
-                    )
-                else:
-                    logger.warning(
-                        "episode_not_found",
-                        episode_id=str(episode_id),
-                    )
                 return self._from_orm(orm_episode) if orm_episode else None
             except Exception as e:
                 logger.error(
                     "episode_get_by_id_failed",
                     episode_id=str(episode_id),
                     error=str(e),
-                    exc_info=True,
                 )
                 raise
 
@@ -170,7 +157,6 @@ class EpisodeRepository:
 
     def _to_orm(self, episode: Episode) -> EpisodeORM:
         """Convert Pydantic model to ORM."""
-
         return EpisodeORM(
             id=episode.id,
             title=episode.title,
@@ -199,7 +185,6 @@ class EpisodeRepository:
         """Convert ORM to Pydantic model."""
         from narrative_engine.models import SourcePassage
 
-        # Handle async relationship loading - use getattr to avoid lazy loading issues
         actors = getattr(orm, 'actors', None)
         source_passages = getattr(orm, 'source_passages', None)
         
@@ -342,7 +327,7 @@ class CycleRepository:
             start_date=orm.start_date,
             end_date=orm.end_date,
             parent_cycle_id=orm.parent_cycle_id,
-            child_cycle_ids=set(),  # Would need separate query
+            child_cycle_ids=set(),
             episode_ids={e.id for e in (orm.episodes or [])},
             dominant_arc_types=orm.dominant_arc_types,
             phase_estimate=orm.phase_estimate,
@@ -387,8 +372,9 @@ class ThesisRepository:
 
     async def get_unresolved(self, limit: int = 100) -> Sequence[Thesis]:
         """Get unresolved theses for monitoring."""
+        from sqlalchemy import not_
         result = await self.session.execute(
-            select(ThesisORM).where(not ThesisORM.resolved).order_by(ThesisORM.created_at.desc()).limit(limit)
+            select(ThesisORM).where(not_(ThesisORM.resolved)).order_by(ThesisORM.created_at.desc()).limit(limit)
         )
         return [self._from_orm(t) for t in result.scalars().all()]
 

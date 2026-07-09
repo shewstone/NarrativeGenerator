@@ -102,6 +102,22 @@ class CycleScale(str, Enum):
     EPISODIC = "episodic"  # individual events
 
 
+class LinkType(str, Enum):
+    """Types of relationships between episodes."""
+
+    ATTESTED = "attested"  # Explicit cross-reference in source text
+    INFERRED = "inferred"  # Structural similarity (no explicit reference)
+    CAUSAL = "causal"  # Causal relationship (precedes/causes)
+
+
+class ReviewStatus(str, Enum):
+    """Review status for inferred links."""
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
 class Continuation(BaseModel):
     """A possible continuation/outcome with probability."""
 
