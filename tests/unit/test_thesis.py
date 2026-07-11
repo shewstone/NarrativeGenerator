@@ -1,6 +1,9 @@
 """Unit tests for thesis generation."""
 
+from unittest.mock import AsyncMock
 from uuid import uuid4
+
+import pytest
 
 from narrative_engine.models import (
     ArcPhase,
@@ -204,6 +207,40 @@ class TestThesisGenerator:
         assert len(thesis.analog_similarity_scores) == len(analog_episodes)
         assert "credit expansion" in thesis.watch_for_indicators
         assert "Panic selling" not in thesis.watch_for_indicators
+
+    @pytest.mark.asyncio
+    async def test_generate_async_uses_configured_llm_for_narrative(self):
+        query = Episode(title="Query", summary="Present situation")
+        episodes = [
+            Episode(
+                title=f"Analog {index}",
+                summary="Historical situation",
+                resolution="Institutions reformed",
+                consequences=["Stability returned"],
+            )
+            for index in range(3)
+        ]
+        analogs = [
+            RetrievedAnalog(
+                episode=episode,
+                semantic_similarity=0.9,
+                arc_match_score=0.9,
+                phase_compatibility=0.9,
+                cycle_context_score=0.9,
+                mechanism_match_score=0.5,
+                combined_score=0.9,
+                retrieval_method="hybrid",
+                reasoning="Strong match",
+            )
+            for episode in episodes
+        ]
+        client = AsyncMock()
+        client.complete_with_json.return_value = {"narrative_summary": "Historical analogs favor institutional reform."}
+
+        thesis = await ThesisGenerator(min_analogs=2, llm_client=client).generate_async(query, analogs)
+
+        assert thesis.narrative_synthesis == "Historical analogs favor institutional reform."
+        client.complete_with_json.assert_awaited_once()
 
 
 class TestAnalogEvidence:

@@ -21,7 +21,7 @@ from narrative_engine.models import (
     MechanismTag,
 )
 from narrative_engine.retrieval.embeddings import EmbeddingGenerator
-from narrative_engine.storage.repositories import CycleRepository, EpisodeRepository
+from narrative_engine.storage.repositories import EpisodeRepository
 
 logger = structlog.get_logger()
 
@@ -96,8 +96,7 @@ class AnalogRetrievalEngine:
         # this mode (nothing conditions on arc labels); in arc-based mode
         # they are excluded from the analog base entirely.
         arc_less = (
-            query_episode.arc_type is None
-            or query_episode.classification_state == ClassificationState.UNCLASSIFIED
+            query_episode.arc_type is None or query_episode.classification_state == ClassificationState.UNCLASSIFIED
         )
         if arc_less:
             self.logger.info(
@@ -216,7 +215,7 @@ class AnalogRetrievalEngine:
 
         # Signal 2: conservative in-set heuristic.
         for i, a in enumerate(analogs):
-            for b in analogs[i + 1:]:
+            for b in analogs[i + 1 :]:
                 if find(a.episode.id) == find(b.episode.id):
                     continue
                 if self._same_event_heuristic(a.episode, b.episode):
@@ -267,9 +266,7 @@ class AnalogRetrievalEngine:
             return False
         if a.surface_embedding_epoch != b.surface_embedding_epoch:
             return False
-        similarity = self.embedding_generator.similarity(
-            a.surface_embedding, b.surface_embedding
-        )
+        similarity = self.embedding_generator.similarity(a.surface_embedding, b.surface_embedding)
         return similarity >= self.same_event_similarity_threshold
 
     async def _score_analog(
@@ -320,10 +317,7 @@ class AnalogRetrievalEngine:
             # Bare structural nearest-neighbor with cycle-state as soft
             # context only; weights renormalized over the two live signals.
             live_weight = self.vector_weight + self.cycle_weight
-            combined = (
-                self.vector_weight * vector_similarity
-                + self.cycle_weight * cycle_score
-            ) / live_weight
+            combined = (self.vector_weight * vector_similarity + self.cycle_weight * cycle_score) / live_weight
         else:
             # Combined score (weighted)
             combined = (
@@ -346,9 +340,7 @@ class AnalogRetrievalEngine:
             reasoning_parts.append("High semantic similarity")
         shared_mechanisms = set(query_episode.mechanism_tags) & set(candidate.mechanism_tags)
         if shared_mechanisms:
-            reasoning_parts.append(
-                f"Shared mechanisms: {', '.join(sorted(m.value for m in shared_mechanisms))}"
-            )
+            reasoning_parts.append(f"Shared mechanisms: {', '.join(sorted(m.value for m in shared_mechanisms))}")
 
         reasoning = "; ".join(reasoning_parts) if reasoning_parts else "General similarity"
 
@@ -508,19 +500,46 @@ class AnalogRetrievalEngine:
     ) -> float:
         """Score cycle context similarity.
 
-        Episodes in the same cycle scale are more directly comparable.
+        Compare the scoped fractal-cycle state vectors attached to each
+        episode. Exact shared membership is strongest; otherwise score the
+        best-aligned pair by scope, scale, and phase.
         """
-        CycleRepository(session)
+        from narrative_engine.storage.orm_models import (
+            CycleMembershipORM,
+            CycleORM,
+        )
 
-        # Get cycles for both episodes
-        # This would require episode.cycles relationship to be loaded
-        # For now, simplified approach
+        result = await session.execute(
+            select(CycleORM, CycleMembershipORM.episode_id)
+            .join(CycleMembershipORM, CycleMembershipORM.cycle_id == CycleORM.id)
+            .where(CycleMembershipORM.episode_id.in_([query.id, candidate.id]))
+        )
+        by_episode = {query.id: [], candidate.id: []}
+        for cycle, episode_id in result.all():
+            by_episode[episode_id].append(cycle)
 
-        # If both are in institutional cycles, that's more comparable than
-        # one being civilizational and one being episodic
+        query_cycles = by_episode[query.id]
+        candidate_cycles = by_episode[candidate.id]
+        if not query_cycles or not candidate_cycles:
+            return 0.5
 
-        # Simplified: assume good context match
-        return 0.8
+        best = 0.0
+        for query_cycle in query_cycles:
+            for candidate_cycle in candidate_cycles:
+                if query_cycle.id == candidate_cycle.id:
+                    return 1.0
+                score = 0.0
+                if query_cycle.scope_id == candidate_cycle.scope_id:
+                    score += 0.3
+                if query_cycle.scale == candidate_cycle.scale:
+                    score += 0.35
+                if (
+                    query_cycle.phase_estimate is not None
+                    and query_cycle.phase_estimate == candidate_cycle.phase_estimate
+                ):
+                    score += 0.35
+                best = max(best, score)
+        return best
 
     async def retrieve_by_causal_chain(
         self,

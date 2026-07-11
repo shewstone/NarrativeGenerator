@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Dict, List, Optional
 from uuid import uuid4
 
 import structlog
 
 from narrative_engine.extraction.config import CURRENT_TAXONOMY_VERSION
-from narrative_engine.scopes import scope_registry_version
 from narrative_engine.models import (
     ClassificationState,
     Continuation,
@@ -21,6 +19,7 @@ from narrative_engine.models import (
     utcnow,
 )
 from narrative_engine.retrieval.analog_retrieval import RetrievedAnalog
+from narrative_engine.scopes import scope_registry_version
 
 logger = structlog.get_logger()
 
@@ -58,6 +57,7 @@ class ThesisGenerator:
         max_analogs: int = 10,
         confidence_threshold: float = 0.6,
         max_per_source: int = 3,
+        llm_client=None,
     ) -> None:
         self.min_analogs = min_analogs
         self.max_analogs = max_analogs
@@ -66,6 +66,7 @@ class ThesisGenerator:
         # even when identity resolution misses duplicates, one source can't
         # supply more than this many analogs to a thesis.
         self.max_per_source = max_per_source
+        self.llm_client = llm_client
         self.logger = structlog.get_logger()
 
     def generate(
@@ -139,15 +140,6 @@ class ThesisGenerator:
                 "underlying events were collapsed before counting analog frequencies"
             )
 
-        # Generate narrative synthesis (optional LLM enhancement)
-        narrative = self._generate_narrative(
-            query_episode,
-            evidence,
-            continuations[0] if continuations else None,
-            confidence,
-            uncertainties,
-        )
-
         thesis = Thesis(
             id=uuid4(),
             query=self._formulate_query(query_episode),
@@ -163,25 +155,64 @@ class ThesisGenerator:
             model_version="thesis-v1.0",
             taxonomy_version=CURRENT_TAXONOMY_VERSION,
             scope_registry_version=scope_registry_version(),
-            narrative_synthesis=narrative,
+            narrative_synthesis=None,
         )
 
         self.logger.info(
             "Thesis generated",
             thesis_id=str(thesis.id),
             confidence=thesis.confidence.value,
-            has_narrative=narrative is not None,
+            has_narrative=False,
         )
 
         return thesis
 
+    async def generate_async(
+        self,
+        query_episode: Episode,
+        analogs: List[RetrievedAnalog],
+    ) -> Thesis:
+        """Generate the quantitative thesis and optionally synthesize it with an LLM."""
+        thesis = self.generate(query_episode, analogs)
+        if thesis.dominant_continuation is None:
+            return thesis
+
+        client = self.llm_client or self._create_llm_client_if_configured()
+        if client is None:
+            return thesis
+
+        from narrative_engine.thesis.prompts import THESIS_NARRATIVE_PROMPT, format_analogs
+
+        alternatives = "; ".join(description for description, _probability in thesis.alternative_continuations[:3])
+        prompt = THESIS_NARRATIVE_PROMPT.format(
+            dominant_continuation=thesis.dominant_continuation.description,
+            probability=thesis.dominant_continuation.probability,
+            alternatives=alternatives or "None identified",
+            confidence=thesis.confidence.value,
+            uncertainties="; ".join(thesis.key_uncertainties[:3]) or "None identified",
+            analogs=format_analogs(analogs[:5]),
+        )
+        try:
+            result = await client.complete_with_json(prompt)
+            thesis.narrative_synthesis = result.get("narrative_summary") or result.get("key_pattern")
+        except Exception as e:
+            self.logger.warning("Failed to generate narrative synthesis", error=str(e))
+        return thesis
+
+    @staticmethod
+    def _create_llm_client_if_configured():
+        import os
+
+        if not any(os.getenv(name) for name in ("NE_LLM_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY")):
+            return None
+        from narrative_engine.extraction.client import ExtractionPipeline
+
+        return ExtractionPipeline().client
+
     def _determine_mode(self, query_episode: Episode) -> ThesisMode:
         """Arc-less iff the query situation carries no arc (failed tau_class
         or was never classified) -- Sec 6.5.8."""
-        if (
-            query_episode.arc_type is None
-            or query_episode.classification_state == ClassificationState.UNCLASSIFIED
-        ):
+        if query_episode.arc_type is None or query_episode.classification_state == ClassificationState.UNCLASSIFIED:
             return ThesisMode.ARC_LESS
         return ThesisMode.ARC_BASED
 
@@ -206,11 +237,7 @@ class ThesisGenerator:
         capped: List[RetrievedAnalog] = []
         per_source: Dict[str, int] = {}
         for analog in filtered:
-            source = (
-                analog.episode.extracted_from[0]
-                if analog.episode.extracted_from
-                else None
-            )
+            source = analog.episode.extracted_from[0] if analog.episode.extracted_from else None
             if source is not None:
                 if per_source.get(source, 0) >= self.max_per_source:
                     continue
@@ -419,70 +446,6 @@ class ThesisGenerator:
         phase = episode.arc_phase.value if episode.arc_phase else "unknown"
 
         return f"What is the likely outcome of '{episode.title}' ({arc}, {phase} phase)?"
-
-    def _generate_narrative(
-        self,
-        query_episode: Episode,
-        evidence: List[AnalogEvidence],
-        dominant_continuation: Optional[Continuation],
-        confidence: ThesisConfidence,
-        uncertainties: List[str],
-    ) -> Optional[str]:
-        """Generate narrative synthesis using LLM.
-
-        This is optional - if LLM is not available, returns None
-        and the thesis relies on algorithmic results only.
-        """
-        try:
-            # Try to import and use LLM client
-            from narrative_engine.extraction.client import get_llm_client
-
-            llm = get_llm_client()
-            if not llm:
-                self.logger.debug("No LLM client available for narrative synthesis")
-                return None
-
-            from narrative_engine.thesis.prompts import (
-                THESIS_NARRATIVE_PROMPT,
-                format_analogs,
-            )
-
-            # Format analogs for prompt
-            analogs = [e.analog for e in evidence[:5]]
-            analogs_text = format_analogs(analogs)
-
-            # Format alternatives
-            alternatives_text = ""
-            if len(evidence) > 1:
-                alt_continuations = list(set([e.continuation for e in evidence[1:5]]))
-                alternatives_text = "; ".join(alt_continuations[:3])
-
-            prompt = THESIS_NARRATIVE_PROMPT.format(
-                dominant_continuation=dominant_continuation.description if dominant_continuation else "Unknown",
-                probability=dominant_continuation.probability if dominant_continuation else 0.0,
-                alternatives=alternatives_text or "None identified",
-                confidence=confidence.value,
-                uncertainties="; ".join(uncertainties[:3]) if uncertainties else "None identified",
-                analogs=analogs_text,
-            )
-
-            response = llm.complete(prompt)
-
-            # Parse JSON response
-            import json
-            try:
-                result = json.loads(response)
-                return result.get("narrative_summary", result.get("key_pattern", "No narrative generated"))
-            except json.JSONDecodeError:
-                # Fallback: return raw response
-                return response[:500] if response else None
-
-        except ImportError:
-            self.logger.debug("LLM client not available for narrative synthesis")
-            return None
-        except Exception as e:
-            self.logger.warning("Failed to generate narrative synthesis", error=str(e))
-            return None
 
     def _create_uncertain_thesis(
         self,

@@ -21,6 +21,7 @@ class LLMConfig:
     temperature: float = 0.0
     max_tokens: int = 4000
     api_key: Optional[str] = None
+    base_url: Optional[str] = None
 
     @classmethod
     def from_env(cls, prefix: str = "NE_") -> LLMConfig:
@@ -37,14 +38,11 @@ class LLMConfig:
 
         return cls(
             provider=provider,
-            model=os.getenv(
-                f"{prefix}LLM_MODEL", default_models.get(provider, "claude-sonnet-5")
-            ),
+            model=os.getenv(f"{prefix}LLM_MODEL", default_models.get(provider, "claude-sonnet-5")),
             temperature=float(os.getenv(f"{prefix}LLM_TEMPERATURE", "0.0")),
             max_tokens=int(os.getenv(f"{prefix}LLM_MAX_TOKENS", "4000")),
-            api_key=os.getenv(f"{prefix}LLM_API_KEY")
-            or os.getenv("ANTHROPIC_API_KEY")
-            or os.getenv("OPENAI_API_KEY"),
+            api_key=os.getenv(f"{prefix}LLM_API_KEY") or os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY"),
+            base_url=os.getenv(f"{prefix}LLM_BASE_URL") or os.getenv("OPENAI_BASE_URL"),
         )
 
 
@@ -95,20 +93,44 @@ class ExtractionPipelineConfig:
     @classmethod
     def from_env(cls, prefix: str = "NE_") -> ExtractionPipelineConfig:
         """Create config from environment variables."""
-        return cls(
+        provider = os.getenv(f"{prefix}LLM_PROVIDER", "anthropic").lower()
+        stage_defaults = {
+            "anthropic": {
+                "segmentation": "claude-haiku-4-5",
+                "strong": "claude-sonnet-5",
+            },
+            "openai": {
+                "segmentation": "gpt-4o-mini",
+                "strong": "gpt-4o",
+            },
+        }
+        if provider not in stage_defaults:
+            raise ValueError(f"Unsupported LLM provider: {provider}")
+        defaults = stage_defaults[provider]
+        config = cls(
             enable_segmentation=os.getenv(f"{prefix}ENABLE_SEGMENTATION", "true").lower() == "true",
             enable_extraction=os.getenv(f"{prefix}ENABLE_EXTRACTION", "true").lower() == "true",
             enable_classification=os.getenv(f"{prefix}ENABLE_CLASSIFICATION", "true").lower() == "true",
             enable_linking=os.getenv(f"{prefix}ENABLE_LINKING", "true").lower() == "true",
-            segmentation_model=os.getenv(f"{prefix}SEG_MODEL", "claude-haiku-4-5"),
-            extraction_model=os.getenv(f"{prefix}EXTRACT_MODEL", "claude-sonnet-5"),
-            classification_model=os.getenv(f"{prefix}CLASSIFY_MODEL", "claude-sonnet-5"),
-            linking_model=os.getenv(f"{prefix}LINK_MODEL", "claude-sonnet-5"),
+            segmentation_model=os.getenv(f"{prefix}SEG_MODEL", defaults["segmentation"]),
+            extraction_model=os.getenv(f"{prefix}EXTRACT_MODEL", defaults["strong"]),
+            classification_model=os.getenv(f"{prefix}CLASSIFY_MODEL", defaults["strong"]),
+            linking_model=os.getenv(f"{prefix}LINK_MODEL", defaults["strong"]),
             chunk_size_tokens=int(os.getenv(f"{prefix}CHUNK_SIZE", "6000")),
             chunk_overlap_tokens=int(os.getenv(f"{prefix}CHUNK_OVERLAP", "500")),
             classification_confidence_floor=float(os.getenv(f"{prefix}TAU_CLASS", "0.5")),
             role_fit_floor=float(os.getenv(f"{prefix}TAU_ROLE", "0.5")),
         )
+        incompatible_prefix = "claude-" if provider == "openai" else "gpt-"
+        for model in (
+            config.segmentation_model,
+            config.extraction_model,
+            config.classification_model,
+            config.linking_model,
+        ):
+            if model.startswith(incompatible_prefix):
+                raise ValueError(f"LLM provider {provider!r} is incompatible with stage model {model!r}")
+        return config
 
 
 @dataclass(frozen=True)

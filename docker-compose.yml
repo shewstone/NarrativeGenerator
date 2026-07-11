@@ -24,8 +24,14 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/narrative_engine
       TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/narrative_engine_test
-      NE_LLM_PROVIDER: anthropic
-      NE_LLM_MODEL: claude-sonnet-5
+      NE_LLM_PROVIDER: ${NE_LLM_PROVIDER:-openai}
+      NE_LLM_BASE_URL: ${NE_LLM_BASE_URL:-https://api.venice.ai/api/v1}
+      NE_LLM_MODEL: ${NE_LLM_MODEL:-openai-gpt-52}
+      NE_SEG_MODEL: ${NE_SEG_MODEL:-openai-gpt-52}
+      NE_EXTRACT_MODEL: ${NE_EXTRACT_MODEL:-openai-gpt-52}
+      NE_CLASSIFY_MODEL: ${NE_CLASSIFY_MODEL:-openai-gpt-52}
+      NE_LINK_MODEL: ${NE_LINK_MODEL:-openai-gpt-52}
+      NE_LLM_API_KEY: ${NE_LLM_API_KEY:-}
     volumes:
       - ./src:/app/src
       - ./tests:/app/tests
@@ -43,10 +49,18 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/narrative_engine
       NE_WATCH_DIR: /app/data/raw
-      NE_LLM_PROVIDER: anthropic
-      NE_LLM_MODEL: claude-sonnet-5
-      # Set OPENAI_API_KEY / ANTHROPIC_API_KEY (e.g. via .env) to enable
+      NE_LLM_PROVIDER: ${NE_LLM_PROVIDER:-openai}
+      NE_LLM_BASE_URL: ${NE_LLM_BASE_URL:-https://api.venice.ai/api/v1}
+      NE_LLM_MODEL: ${NE_LLM_MODEL:-openai-gpt-52}
+      NE_SEG_MODEL: ${NE_SEG_MODEL:-openai-gpt-52}
+      NE_EXTRACT_MODEL: ${NE_EXTRACT_MODEL:-openai-gpt-52}
+      NE_CLASSIFY_MODEL: ${NE_CLASSIFY_MODEL:-openai-gpt-52}
+      NE_LINK_MODEL: ${NE_LINK_MODEL:-openai-gpt-52}
+      NE_LLM_MAX_TOKENS: ${NE_LLM_MAX_TOKENS:-4000}
+      NE_ENABLE_LINKING: ${NE_ENABLE_LINKING:-true}
+      # Set NE_LLM_API_KEY (e.g. via .env) to enable
       # extraction; without a key files ingest with extraction pending.
+      NE_LLM_API_KEY: ${NE_LLM_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     volumes:

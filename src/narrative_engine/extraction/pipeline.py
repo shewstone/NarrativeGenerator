@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from contextlib import suppress
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import structlog
@@ -52,8 +51,8 @@ class ExtractionOrchestrator:
         pipeline: Optional[ExtractionPipeline] = None,
         config: Optional[ExtractionPipelineConfig] = None,
     ) -> None:
-        self.pipeline = pipeline or ExtractionPipeline(config=config)
         self.config = config or ExtractionPipelineConfig.from_env()
+        self.pipeline = pipeline or ExtractionPipeline(config=self.config)
         self.logger = structlog.get_logger()
 
     async def process_text(
@@ -122,6 +121,21 @@ class ExtractionOrchestrator:
 
             # Store in database
             await self._store_episodes(episodes, session)
+
+            if self.config.enable_linking and len(episodes) > 1:
+                self.logger.info("Stage 4: Linking")
+                for index, source in enumerate(episodes):
+                    for target in episodes[index + 1 :]:
+                        try:
+                            await self._link_episode_pair(source, target, session)
+                        except Exception as e:
+                            self.logger.error(
+                                "Linking failed",
+                                source=source.title,
+                                target=target.title,
+                                error=str(e),
+                            )
+                            errors.append(f"Linking {source.title} -> {target.title}: {str(e)}")
 
         except Exception as e:
             self.logger.error("Pipeline failed", error=str(e), chunk_id=source_chunk_id)
@@ -327,6 +341,46 @@ class ExtractionOrchestrator:
             except Exception as e:
                 self.logger.error(f"Failed to store episode: {episode.title}", error=str(e))
                 raise
+
+    async def _link_episode_pair(
+        self,
+        source: Episode,
+        target: Episode,
+        session: AsyncSession,
+    ) -> None:
+        """Persist a supported identity/causal relationship for one pair."""
+        from narrative_engine.storage.orm_models import EpisodeLinkORM
+
+        result = await self.pipeline.link(source.model_dump(mode="json"), target.model_dump(mode="json"))
+        relationship = result.get("relationship")
+        if relationship not in {"same_event", "causes", "caused_by"}:
+            return
+        if float(result.get("confidence", 0.0)) < 0.5:
+            return
+
+        evidence = result.get("evidence_quote")
+        if relationship in {"causes", "caused_by"} and not evidence:
+            raise ValueError("Causal link requires a verbatim evidence quote")
+        if evidence:
+            supplied_text = "\n".join((source.title, source.summary, target.title, target.summary))
+            if evidence not in supplied_text:
+                raise ValueError("Evidence quote is not present in the supplied episode text")
+
+        source_id, target_id = source.id, target.id
+        if relationship == "caused_by":
+            source_id, target_id = target_id, source_id
+        edge_kind = "same_event_as" if relationship == "same_event" else "causes"
+        session.add(
+            EpisodeLinkORM(
+                source_episode_id=source_id,
+                target_episode_id=target_id,
+                edge_kind=edge_kind,
+                link_status="attested",
+                evidence=evidence or result.get("reasoning"),
+                review_status="pending",
+            )
+        )
+        await session.flush()
 
     async def process_batch(
         self,

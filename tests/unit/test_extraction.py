@@ -40,6 +40,13 @@ class TestLLMConfig:
         assert config.temperature == 0.5
         assert config.max_tokens == 8000
 
+    def test_config_reads_openai_compatible_base_url(self, monkeypatch):
+        monkeypatch.setenv("NE_LLM_BASE_URL", "https://api.venice.ai/api/v1")
+
+        config = LLMConfig.from_env()
+
+        assert config.base_url == "https://api.venice.ai/api/v1"
+
 
 class TestExtractionPipelineConfig:
     """Tests for extraction pipeline configuration."""
@@ -57,6 +64,7 @@ class TestExtractionPipelineConfig:
 
     def test_pipeline_config_from_env(self, monkeypatch):
         """Test pipeline configuration from environment."""
+        monkeypatch.setenv("NE_LLM_PROVIDER", "openai")
         monkeypatch.setenv("NE_ENABLE_SEGMENTATION", "false")
         monkeypatch.setenv("NE_SEG_MODEL", "gpt-4")
 
@@ -65,9 +73,51 @@ class TestExtractionPipelineConfig:
         assert config.enable_segmentation is False
         assert config.segmentation_model == "gpt-4"
 
+    def test_openai_provider_gets_openai_stage_defaults(self, monkeypatch):
+        monkeypatch.setenv("NE_LLM_PROVIDER", "openai")
+        for var in ("NE_SEG_MODEL", "NE_EXTRACT_MODEL", "NE_CLASSIFY_MODEL", "NE_LINK_MODEL"):
+            monkeypatch.delenv(var, raising=False)
+
+        config = ExtractionPipelineConfig.from_env()
+
+        assert all(
+            not model.startswith("claude-")
+            for model in (
+                config.segmentation_model,
+                config.extraction_model,
+                config.classification_model,
+                config.linking_model,
+            )
+        )
+
+    def test_rejects_provider_stage_model_mismatch(self, monkeypatch):
+        monkeypatch.setenv("NE_LLM_PROVIDER", "openai")
+        monkeypatch.setenv("NE_SEG_MODEL", "claude-haiku-4-5")
+
+        with pytest.raises(ValueError, match="openai.*claude-haiku-4-5"):
+            ExtractionPipelineConfig.from_env()
+
 
 class TestOpenAIClient:
     """Tests for OpenAI client."""
+
+    def test_uses_configured_openai_compatible_endpoint(self, monkeypatch):
+        constructor = MagicMock()
+        monkeypatch.setattr("narrative_engine.extraction.client.openai.AsyncOpenAI", constructor)
+
+        OpenAIClient(
+            LLMConfig(
+                provider="openai",
+                model="openai-gpt-52",
+                api_key="venice-test-key",
+                base_url="https://api.venice.ai/api/v1",
+            )
+        )
+
+        constructor.assert_called_once_with(
+            api_key="venice-test-key",
+            base_url="https://api.venice.ai/api/v1",
+        )
 
     @pytest.fixture
     def mock_openai_response(self):
@@ -247,6 +297,15 @@ class TestExtractionOrchestrator:
         pipeline = AsyncMock()
         return pipeline
 
+    def test_default_pipeline_receives_environment_config(self, monkeypatch):
+        monkeypatch.setenv("NE_SEG_MODEL", "configured-segmenter")
+        monkeypatch.setenv("NE_LLM_API_KEY", "test-key")
+
+        orchestrator = ExtractionOrchestrator()
+
+        assert orchestrator.pipeline.config is orchestrator.config
+        assert orchestrator.pipeline.config.segmentation_model == "configured-segmenter"
+
     @pytest.mark.asyncio
     async def test_process_text_full_pipeline(self, mock_pipeline):
         """Test full pipeline execution."""
@@ -292,6 +351,92 @@ class TestExtractionOrchestrator:
         assert result.episodes[0].title == "Test Episode"
         assert result.errors == []
         assert result.processing_time_ms > 0
+
+    @pytest.mark.asyncio
+    async def test_process_text_persists_attested_causal_links(self, mock_pipeline):
+        from narrative_engine.storage.orm_models import EpisodeLinkORM
+
+        mock_pipeline.segment.return_value = {
+            "episodes": [
+                {"number": 1, "summary": "Cause", "text": "Cause text"},
+                {"number": 2, "summary": "Effect", "text": "Effect text"},
+            ]
+        }
+        mock_pipeline.extract.side_effect = [
+            {"title": "Cause", "summary": "Cause", "actors": [], "setting": {}},
+            {"title": "Effect", "summary": "Effect", "actors": [], "setting": {}},
+        ]
+        mock_pipeline.classify.return_value = {
+            "arc_type": "hero_journey",
+            "arc_phase": "setup",
+            "phase_confidence": 0.8,
+        }
+        mock_pipeline.link.return_value = {
+            "relationship": "causes",
+            "confidence": 0.9,
+            "reasoning": "Explicit causal statement",
+            "evidence_quote": "Cause",
+        }
+        session = AsyncMock()
+        session.add = MagicMock()
+        session.flush = AsyncMock()
+
+        result = await ExtractionOrchestrator(pipeline=mock_pipeline).process_text("Text", "chunk", session)
+
+        links = [call.args[0] for call in session.add.call_args_list if isinstance(call.args[0], EpisodeLinkORM)]
+        assert result.errors == []
+        assert len(links) == 1
+        assert links[0].edge_kind == "causes"
+        assert links[0].link_status == "attested"
+        assert links[0].evidence == "Cause"
+
+    @pytest.mark.asyncio
+    async def test_process_text_rejects_causal_link_without_quote(self, mock_pipeline):
+        mock_pipeline.segment.return_value = {
+            "episodes": [
+                {"number": 1, "summary": "A", "text": "A"},
+                {"number": 2, "summary": "B", "text": "B"},
+            ]
+        }
+        mock_pipeline.extract.side_effect = [
+            {"title": "A", "summary": "A", "actors": [], "setting": {}},
+            {"title": "B", "summary": "B", "actors": [], "setting": {}},
+        ]
+        mock_pipeline.classify.return_value = {
+            "arc_type": "hero_journey",
+            "arc_phase": "setup",
+            "phase_confidence": 0.8,
+        }
+        mock_pipeline.link.return_value = {
+            "relationship": "causes",
+            "confidence": 0.9,
+            "reasoning": "Unsupported assertion",
+        }
+        session = AsyncMock()
+        session.add = MagicMock()
+        session.flush = AsyncMock()
+
+        result = await ExtractionOrchestrator(pipeline=mock_pipeline).process_text("Text", "chunk", session)
+
+        assert any("evidence quote" in error.lower() for error in result.errors)
+
+    @pytest.mark.asyncio
+    async def test_link_pair_rejects_quote_not_present_in_episode_text(self, mock_pipeline):
+        from narrative_engine.models import Episode
+
+        mock_pipeline.link.return_value = {
+            "relationship": "causes",
+            "confidence": 0.9,
+            "evidence_quote": "A hallucinated quotation",
+        }
+        orchestrator = ExtractionOrchestrator(pipeline=mock_pipeline)
+
+        with pytest.raises(ValueError, match="not present"):
+            await orchestrator._link_episode_pair(
+                Episode(title="A", summary="Documented cause"),
+                Episode(title="B", summary="Documented effect"),
+                AsyncMock(),
+            )
 
     @pytest.mark.asyncio
     async def test_process_text_with_errors(self, mock_pipeline):

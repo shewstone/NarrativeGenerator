@@ -34,7 +34,7 @@ from narrative_engine.evaluation.baselines import PersistenceBaseline
 from narrative_engine.evaluation.masking import mask_corpus_at, mask_episode_at
 from narrative_engine.evaluation.metrics import BrierScore
 from narrative_engine.logging_config import get_logger
-from narrative_engine.models import Episode, ThesisMode
+from narrative_engine.models import Episode
 from narrative_engine.retrieval.analog_retrieval import AnalogRetrievalEngine
 from narrative_engine.retrieval.reembed import stale_fraction
 from narrative_engine.storage.repositories import EpisodeRepository
@@ -75,9 +75,7 @@ class HarnessReport:
         thesis_briers = [c.brier for c in scored]
         persistence_briers = [c.persistence_brier for c in self.cases]
         mean_thesis = sum(thesis_briers) / len(thesis_briers) if thesis_briers else None
-        mean_persistence = (
-            sum(persistence_briers) / len(persistence_briers) if persistence_briers else None
-        )
+        mean_persistence = sum(persistence_briers) / len(persistence_briers) if persistence_briers else None
         skill = None
         if mean_thesis is not None and mean_persistence:
             skill = 1.0 - (mean_thesis / mean_persistence)
@@ -100,15 +98,10 @@ def _assert_no_leakage(analogs, cutoff: datetime) -> None:
     for analog in analogs:
         episode = analog.episode
         if episode.start_date is not None and episode.start_date > cutoff:
+            raise LeakageError(f"Analog {episode.title!r} starts after cutoff {cutoff:%Y-%m-%d}")
+        if episode.resolution is not None and (episode.end_date is None or episode.end_date > cutoff):
             raise LeakageError(
-                f"Analog {episode.title!r} starts after cutoff {cutoff:%Y-%m-%d}"
-            )
-        if episode.resolution is not None and (
-            episode.end_date is None or episode.end_date > cutoff
-        ):
-            raise LeakageError(
-                f"Analog {episode.title!r} carries a resolution not knowable "
-                f"at cutoff {cutoff:%Y-%m-%d}"
+                f"Analog {episode.title!r} carries a resolution not knowable " f"at cutoff {cutoff:%Y-%m-%d}"
             )
 
 
@@ -128,9 +121,7 @@ async def load_masked_corpus(
     repo = EpisodeRepository(session)
     for episode in masked:
         await repo.create(episode)
-        await repo.update_embedding(
-            episode.id, embedder.generate_surface_embedding(episode), kind="surface"
-        )
+        await repo.update_embedding(episode.id, embedder.generate_surface_embedding(episode), kind="surface")
         await repo.update_embedding(
             episode.id,
             embedder.generate_structural_embedding(episode),
@@ -164,8 +155,7 @@ async def run_backtest(
     fraction = await stale_fraction(session)
     if fraction > 0:
         raise LeakageError(
-            f"Corpus contains {fraction:.1%} stale-epoch embeddings; re-embed "
-            "before running a backtest"
+            f"Corpus contains {fraction:.1%} stale-epoch embeddings; re-embed " "before running a backtest"
         )
 
     # Test cases: episodes spanning the cutoff with a known true outcome.
@@ -199,16 +189,12 @@ async def run_backtest(
         analogs = await retrieval.retrieve_analogs(masked_query, session, k=k)
         _assert_no_leakage(analogs, cutoff)
 
-        thesis = generator.generate(masked_query, analogs)
+        thesis = await generator.generate_async(masked_query, analogs)
 
         # Persistence baseline, scored with the same matching rule.
         baseline = persistence.predict(masked_query)
-        matched, _ = scorer._match_outcome(
-            original.resolution, [baseline.predicted_continuation]
-        )
-        persistence_brier = BrierScore.calculate(
-            baseline.probability, 1 if matched else 0
-        ).score
+        matched, _ = scorer._match_outcome(original.resolution, [baseline.predicted_continuation])
+        persistence_brier = BrierScore.calculate(baseline.probability, 1 if matched else 0).score
 
         if thesis.dominant_continuation is None:
             # Visible degraded outcome, never silently skipped (Sec 6.5.8).

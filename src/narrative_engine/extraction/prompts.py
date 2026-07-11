@@ -252,12 +252,16 @@ def get_linking_prompt(episode1: Dict, episode2: Dict) -> str:
 - Provide confidence (0.0-1.0)
 - Explain reasoning
 - If causal, specify mechanism if apparent
+- If causal, provide a verbatim quote from the supplied episode summaries
+  that explicitly supports the direction of causation. Without such a quote,
+  return "related" rather than making a causal claim.
 
 **Output format (JSON):**
 {{
   "relationship": "same_event|causes|caused_by|related|unrelated",
   "confidence": 0.0-1.0,
   "reasoning": "...",
+  "evidence_quote": "verbatim supporting quote" (required if causal),
   "mechanism": "..." (if causal)
 }}
 

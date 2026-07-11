@@ -67,9 +67,10 @@ class OpenAIClient(LLMClient):
 
     def __init__(self, config: LLMConfig) -> None:
         super().__init__(config)
-        self.client = openai.AsyncOpenAI(
-            api_key=config.api_key or os.getenv("OPENAI_API_KEY"),
-        )
+        client_options = {"api_key": config.api_key or os.getenv("OPENAI_API_KEY")}
+        if config.base_url:
+            client_options["base_url"] = config.base_url
+        self.client = openai.AsyncOpenAI(**client_options)
 
     @retry(
         retry=retry_if_exception_type((openai.RateLimitError, openai.APITimeoutError)),
