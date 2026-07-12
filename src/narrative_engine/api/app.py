@@ -17,7 +17,8 @@ from importlib import resources
 from typing import AsyncGenerator, Optional
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, HTTPException
+import numpy as np
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
@@ -34,6 +35,27 @@ from narrative_engine.storage.orm_models import (
 from narrative_engine.storage.repositories import SourceDocumentRepository
 
 logger = get_logger(__name__)
+
+
+def _pca_3d(vectors: np.ndarray) -> tuple[np.ndarray, list[float]]:
+    """Deterministic, dependency-light 3D projection for exploration only."""
+    centered = vectors - vectors.mean(axis=0, keepdims=True)
+    if len(vectors) == 1 or not np.any(centered):
+        return np.zeros((len(vectors), 3)), [0.0, 0.0, 0.0]
+    u, singular_values, _ = np.linalg.svd(centered, full_matrices=False)
+    dimensions = min(3, len(singular_values))
+    projected = u[:, :dimensions] * singular_values[:dimensions]
+    projected = np.pad(projected, ((0, 0), (0, 3 - dimensions)))
+    variance = singular_values**2
+    total = float(variance.sum())
+    explained = (variance[:dimensions] / total).tolist() if total else []
+    return projected, [float(value) for value in explained] + [0.0] * (3 - dimensions)
+
+
+def _cosine_similarities(vectors: np.ndarray) -> np.ndarray:
+    norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+    normalized = np.divide(vectors, norms, out=np.zeros_like(vectors), where=norms != 0)
+    return normalized @ normalized.T
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
@@ -236,6 +258,255 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
                 }
             )
         return payload
+
+    @app.get("/api/arc-space")
+    async def arc_space(
+        k: int = Query(3, ge=1, le=10),
+        limit: int = Query(500, ge=1, le=1000),
+        session: AsyncSession = Depends(get_session),
+    ) -> dict:
+        """Project structural vectors and explain graph relationships.
+
+        PCA coordinates are an exploratory view only. Similarity values and
+        neighbor selection always come from the original embedding space.
+        """
+        from narrative_engine.retrieval.epochs import current_epoch
+
+        episodes = (
+            (
+                await session.execute(
+                    select(EpisodeORM)
+                    .where(
+                        EpisodeORM.structural_embedding.is_not(None),
+                        EpisodeORM.structural_embedding_epoch
+                        == current_epoch("structural"),
+                    )
+                    .order_by(EpisodeORM.start_date, EpisodeORM.created_at)
+                    .limit(limit)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if not episodes:
+            return {
+                "projection": {
+                    "algorithm": "pca",
+                    "source_dimensions": 384,
+                    "display_dimensions": 3,
+                    "explained_variance": [0.0, 0.0, 0.0],
+                    "embedding_epoch": current_epoch("structural"),
+                    "warning": "Projection distance is approximate; similarity uses original vectors.",
+                },
+                "nodes": [],
+                "edges": [],
+            }
+
+        vectors = np.asarray(
+            [np.asarray(episode.structural_embedding, dtype=float) for episode in episodes]
+        )
+        coordinates, explained = _pca_3d(vectors)
+        similarities = _cosine_similarities(vectors)
+        episode_ids = [episode.id for episode in episodes]
+        selected_ids = set(episode_ids)
+        by_id = {episode.id: episode for episode in episodes}
+
+        memberships = (
+            (
+                await session.execute(
+                    select(CycleMembershipORM, CycleORM)
+                    .join(CycleORM, CycleMembershipORM.cycle_id == CycleORM.id)
+                    .where(
+                        CycleORM.is_arc_instance,
+                        CycleMembershipORM.episode_id.in_(selected_ids),
+                        CycleMembershipORM.review_status != "rejected",
+                    )
+                )
+            )
+            .all()
+        )
+        memberships_by_episode: dict = {}
+        memberships_by_cycle: dict = {}
+        for membership, cycle in memberships:
+            memberships_by_episode.setdefault(membership.episode_id, []).append(
+                (membership, cycle)
+            )
+            memberships_by_cycle.setdefault(cycle.id, []).append((membership, cycle))
+
+        nodes = []
+        for index, episode in enumerate(episodes):
+            episode_memberships = memberships_by_episode.get(episode.id, [])
+            nodes.append(
+                {
+                    "id": str(episode.id),
+                    "title": episode.title,
+                    "summary": episode.summary,
+                    "x": float(coordinates[index, 0]),
+                    "y": float(coordinates[index, 1]),
+                    "z": float(coordinates[index, 2]),
+                    "arc_type": episode.arc_type.value if episode.arc_type else None,
+                    "phase": episode.arc_phase.value if episode.arc_phase else None,
+                    "confidence": float(episode.phase_confidence or 0.0),
+                    "classification_state": episode.classification_state,
+                    "start_date": episode.start_date.isoformat() if episode.start_date else None,
+                    "end_date": episode.end_date.isoformat() if episode.end_date else None,
+                    "scope_id": episode.scope_id,
+                    "location": episode.location,
+                    "mechanisms": list(episode.mechanism_tags or []),
+                    "source_chunks": list(episode.extracted_from or []),
+                    "arc_instances": [
+                        {
+                            "id": str(cycle.id),
+                            "name": cycle.name,
+                            "link_status": membership.link_status,
+                            "review_status": membership.review_status,
+                        }
+                        for membership, cycle in episode_memberships
+                    ],
+                }
+            )
+
+        edges = []
+        seen_neighbors = set()
+        neighbor_count = min(k, max(0, len(episodes) - 1))
+        for source_index, source in enumerate(episodes):
+            candidates = np.argsort(-similarities[source_index])
+            neighbors = [i for i in candidates if i != source_index][:neighbor_count]
+            for target_index in neighbors:
+                pair = tuple(sorted((source_index, int(target_index))))
+                if pair in seen_neighbors:
+                    continue
+                seen_neighbors.add(pair)
+                target = episodes[target_index]
+                shared = sorted(
+                    set(source.mechanism_tags or []) & set(target.mechanism_tags or [])
+                )
+                surface_similarity = None
+                if source.surface_embedding is not None and target.surface_embedding is not None:
+                    surface_pair = np.asarray(
+                        [source.surface_embedding, target.surface_embedding], dtype=float
+                    )
+                    surface_similarity = float(_cosine_similarities(surface_pair)[0, 1])
+                structural_similarity = float(similarities[source_index, target_index])
+                edges.append(
+                    {
+                        "source": str(source.id),
+                        "target": str(target.id),
+                        "kind": "structural_neighbor",
+                        "structural_similarity": structural_similarity,
+                        "surface_similarity": surface_similarity,
+                        "shared_mechanisms": shared,
+                        "explanation": {
+                            "summary": (
+                                f"Structural cosine similarity {structural_similarity:.3f}"
+                                + (
+                                    f" with shared mechanisms: {', '.join(shared)}"
+                                    if shared
+                                    else "; no shared controlled mechanism tags"
+                                )
+                            ),
+                            "same_arc_type": source.arc_type == target.arc_type,
+                            "same_scope": bool(
+                                source.scope_id
+                                and target.scope_id
+                                and source.scope_id == target.scope_id
+                            ),
+                            "projection_is_approximate": True,
+                        },
+                    }
+                )
+
+        for cycle_memberships in memberships_by_cycle.values():
+            ordered = sorted(
+                cycle_memberships,
+                key=lambda item: (
+                    by_id[item[0].episode_id].start_date is None,
+                    by_id[item[0].episode_id].start_date,
+                    by_id[item[0].episode_id].created_at,
+                ),
+            )
+            for (source_membership, cycle), (target_membership, _) in zip(
+                ordered, ordered[1:], strict=False
+            ):
+                source = by_id[source_membership.episode_id]
+                target = by_id[target_membership.episode_id]
+                edges.append(
+                    {
+                        "source": str(source.id),
+                        "target": str(target.id),
+                        "kind": "arc_sequence",
+                        "arc_id": str(cycle.id),
+                        "arc_name": cycle.name,
+                        "link_status": target_membership.link_status,
+                        "review_status": target_membership.review_status,
+                        "structural_similarity": float(
+                            similarities[
+                                episode_ids.index(source.id), episode_ids.index(target.id)
+                            ]
+                        ),
+                        "shared_mechanisms": sorted(
+                            set(source.mechanism_tags or [])
+                            & set(target.mechanism_tags or [])
+                        ),
+                        "explanation": {
+                            "summary": (
+                                f"Chronological progression within {cycle.name}: "
+                                f"{source.arc_phase.value if source.arc_phase else 'unknown'} → "
+                                f"{target.arc_phase.value if target.arc_phase else 'unknown'}"
+                            ),
+                            "evidence_status": target_membership.link_status,
+                            "review_status": target_membership.review_status,
+                        },
+                    }
+                )
+
+        links = (
+            (
+                await session.execute(
+                    select(EpisodeLinkORM).where(
+                        EpisodeLinkORM.source_episode_id.in_(selected_ids),
+                        EpisodeLinkORM.target_episode_id.in_(selected_ids),
+                        EpisodeLinkORM.review_status != "rejected",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for link in links:
+            edges.append(
+                {
+                    "source": str(link.source_episode_id),
+                    "target": str(link.target_episode_id),
+                    "kind": link.edge_kind,
+                    "confidence": (
+                        max(0.0, 1.0 - float(link.distance))
+                        if link.distance is not None
+                        else None
+                    ),
+                    "link_status": link.link_status,
+                    "review_status": link.review_status,
+                    "evidence": link.evidence,
+                    "explanation": {
+                        "summary": link.evidence or f"{link.edge_kind} relationship",
+                        "evidence_status": link.link_status,
+                        "review_status": link.review_status,
+                    },
+                }
+            )
+
+        return {
+            "projection": {
+                "algorithm": "pca",
+                "source_dimensions": int(vectors.shape[1]),
+                "display_dimensions": 3,
+                "explained_variance": explained,
+                "embedding_epoch": current_epoch("structural"),
+                "warning": "Projection distance is approximate; similarity uses original vectors.",
+            },
+            "nodes": nodes,
+            "edges": edges,
+        }
 
     @app.get("/api/review-queue")
     async def review_queue(session: AsyncSession = Depends(get_session)) -> dict:

@@ -22,6 +22,7 @@ from narrative_engine.models import (
     Episode,
     EpisodeLink,
     LinkStatus,
+    MechanismTag,
     ReviewStatus,
     SourceDocument,
     SourceDocumentStatus,
@@ -56,6 +57,9 @@ class TestDashboardShell:
         response = await client.get("/")
         assert response.status_code == 200
         assert "NARRATIVE ENGINE" in response.text
+        assert "Arc Space" in response.text
+        assert "Evidence inspector" in response.text
+        assert "/api/arc-space" in response.text
 
     @pytest.mark.asyncio
     async def test_health(self, client):
@@ -188,6 +192,103 @@ class TestArcInstancesEndpoint:
         # Gap visibility: expected phases include ones NOT covered.
         assert set(arc["expected_phases"]) - set(arc["covered_phases"])
         assert arc["episodes"][0]["link_status"] == "inferred"
+
+
+class TestArcSpaceEndpoint:
+    @pytest.mark.asyncio
+    async def test_returns_projected_nodes_and_interpretable_edges(self, client, db_session):
+        repo = EpisodeRepository(db_session)
+        first = Episode(
+            title="Credit expansion",
+            summary="Banks expanded leverage.",
+            arc_type=ArcType.CREDIT_BOOM_AND_BUST,
+            arc_phase=ArcPhase.BOOM,
+            phase_confidence=0.91,
+            mechanism_tags=[MechanismTag.CREDIT_EXPANSION, MechanismTag.DEBT_OVERHANG],
+            start_date=datetime(1906, 1, 1, tzinfo=UTC),
+        )
+        second = Episode(
+            title="Banking panic",
+            summary="Depositors rushed to withdraw funds.",
+            arc_type=ArcType.CREDIT_BOOM_AND_BUST,
+            arc_phase=ArcPhase.PANIC,
+            phase_confidence=0.94,
+            mechanism_tags=[MechanismTag.CREDIT_EXPANSION, MechanismTag.FISCAL_DISTRESS],
+            start_date=datetime(1907, 10, 1, tzinfo=UTC),
+        )
+        await repo.create(first)
+        await repo.create(second)
+        await repo.update_embedding(first.id, [1.0, 0.0] + [0.0] * 382, kind="structural")
+        await repo.update_embedding(second.id, [0.9, 0.1] + [0.0] * 382, kind="structural")
+        await repo.update_embedding(first.id, [1.0, 0.0] + [0.0] * 382, kind="surface")
+        await repo.update_embedding(second.id, [0.8, 0.2] + [0.0] * 382, kind="surface")
+
+        cycle = Cycle(
+            name="Credit cycle, United States, 1906–1907",
+            scale=CycleScale.EPISODIC,
+            is_arc_instance=True,
+            dominant_arc_types=[ArcType.CREDIT_BOOM_AND_BUST],
+        )
+        await CycleRepository(db_session).create(cycle)
+        for episode in (first, second):
+            await CycleMembershipRepository(db_session).create(
+                CycleMembership(
+                    episode_id=episode.id,
+                    cycle_id=cycle.id,
+                    link_status=LinkStatus.INFERRED,
+                    review_status=ReviewStatus.PENDING,
+                )
+            )
+
+        rejected_cycle = Cycle(
+            name="Rejected candidate arc",
+            scale=CycleScale.EPISODIC,
+            is_arc_instance=True,
+        )
+        await CycleRepository(db_session).create(rejected_cycle)
+        for episode in (first, second):
+            await CycleMembershipRepository(db_session).create(
+                CycleMembership(
+                    episode_id=episode.id,
+                    cycle_id=rejected_cycle.id,
+                    link_status=LinkStatus.INFERRED,
+                    review_status=ReviewStatus.REJECTED,
+                )
+            )
+        await EpisodeLinkRepository(db_session).create(
+            EpisodeLink(
+                source_episode_id=first.id,
+                target_episode_id=second.id,
+                edge_kind=EdgeKind.SAME_EVENT_AS,
+                link_status=LinkStatus.INFERRED,
+                review_status=ReviewStatus.REJECTED,
+            )
+        )
+
+        response = await client.get("/api/arc-space?k=1")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["projection"]["algorithm"] == "pca"
+        assert body["projection"]["source_dimensions"] == 384
+        assert len(body["nodes"]) == 2
+        assert {node["title"] for node in body["nodes"]} == {
+            "Credit expansion",
+            "Banking panic",
+        }
+        assert all(set(node) >= {"x", "y", "z", "mechanisms", "phase"} for node in body["nodes"])
+
+        knn = next(edge for edge in body["edges"] if edge["kind"] == "structural_neighbor")
+        assert knn["structural_similarity"] > 0.9
+        assert knn["shared_mechanisms"] == ["credit_expansion"]
+        assert "explanation" in knn
+
+        trajectory = next(edge for edge in body["edges"] if edge["kind"] == "arc_sequence")
+        assert trajectory["arc_name"] == cycle.name
+        assert trajectory["review_status"] == "pending"
+        assert not any(
+            edge.get("arc_name") == rejected_cycle.name for edge in body["edges"]
+        )
+        assert not any(edge["kind"] == "same_event_as" for edge in body["edges"])
 
 
 class TestReviewFlow:

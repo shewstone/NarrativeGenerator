@@ -2,192 +2,116 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Narrative Engine</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Narrative Engine · Arc Space</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <style>
-  :root {
-    --bg: #0f1115; --panel: #171a21; --border: #2a2f3a; --text: #d7dae0;
-    --dim: #8b91a0; --accent: #6aa1ff; --ok: #4fbf7a; --warn: #e0b34f;
-    --err: #e06a6a; --dup: #b07fe0;
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text);
-         font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
-  header { padding: 14px 22px; border-bottom: 1px solid var(--border);
-           display: flex; gap: 24px; align-items: baseline; }
-  header h1 { font-size: 16px; margin: 0; letter-spacing: 0.04em; }
-  header .stat { color: var(--dim); }
-  header .stat b { color: var(--text); }
-  main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px 22px; }
-  section { background: var(--panel); border: 1px solid var(--border);
-            border-radius: 8px; padding: 14px 16px; overflow: auto; }
-  section.wide { grid-column: 1 / -1; }
-  h2 { font-size: 13px; margin: 0 0 10px; color: var(--accent);
-       text-transform: uppercase; letter-spacing: 0.08em; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th { text-align: left; color: var(--dim); font-weight: normal;
-       border-bottom: 1px solid var(--border); padding: 4px 8px; }
-  td { padding: 5px 8px; border-bottom: 1px solid #1e222b; vertical-align: top; }
-  .badge { padding: 1px 8px; border-radius: 10px; font-size: 12px; }
-  .badge.completed { background: #17351f; color: var(--ok); }
-  .badge.processing, .badge.queued { background: #33301a; color: var(--warn); }
-  .badge.failed { background: #3a1d1d; color: var(--err); }
-  .badge.duplicate { background: #2c1f3a; color: var(--dup); }
-  .dim { color: var(--dim); }
-  .arc { margin: 0 0 18px; }
-  .arc .name { margin-bottom: 6px; }
-  .arc .scope { color: var(--dim); }
-  .lane { display: flex; gap: 4px; margin: 4px 0 6px; }
-  .phase { flex: 1; height: 22px; border: 1px solid var(--border); border-radius: 4px;
-           display: flex; align-items: center; justify-content: center;
-           font-size: 11px; color: var(--dim); }
-  .phase.covered { background: #1b2c46; border-color: var(--accent); color: var(--accent); }
-  .eps { font-size: 12px; color: var(--dim); }
-  .eps .inferred { color: var(--dup); }
-  button { background: transparent; border: 1px solid var(--border); color: var(--text);
-           border-radius: 5px; padding: 2px 10px; cursor: pointer; font: inherit; font-size: 12px; }
-  button:hover { border-color: var(--accent); color: var(--accent); }
-  button.reject:hover { border-color: var(--err); color: var(--err); }
-  .empty { color: var(--dim); font-style: italic; padding: 8px 0; }
-  progress { width: 90px; height: 8px; accent-color: var(--accent); vertical-align: middle; }
-  footer { padding: 8px 22px 20px; color: var(--dim); font-size: 12px; }
+:root {
+  --bg:#080b10; --panel:#0f141c; --panel2:#131a24; --line:#222c39;
+  --text:#edf1f7; --muted:#8894a6; --accent:#7aa2ff; --cyan:#54d6d2;
+  --green:#65d391; --amber:#e7ba62; --red:#f07979; --purple:#b794f6;
+  --shadow:0 16px 50px rgba(0,0,0,.28);
+}
+*{box-sizing:border-box} [hidden]{display:none!important} html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text)}
+body{font:13px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+button,select,input{font:inherit}.shell{min-height:100vh;background:radial-gradient(circle at 25% -10%,rgba(92,125,225,.12),transparent 34%),var(--bg)}
+header{height:62px;padding:0 24px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:28px;background:rgba(8,11,16,.86);backdrop-filter:blur(18px);position:sticky;top:0;z-index:20}
+.brand{font-weight:680;letter-spacing:.12em;font-size:13px;white-space:nowrap}.brand i{color:var(--accent);font-style:normal}.nav{display:flex;align-self:stretch;gap:4px}
+.nav button{border:0;background:transparent;color:var(--muted);padding:0 15px;cursor:pointer;border-bottom:2px solid transparent}.nav button.active{color:var(--text);border-color:var(--accent)}
+.stats{margin-left:auto;display:flex;gap:18px;color:var(--muted);font-size:12px}.stats b{color:var(--text);font-weight:600}.updated{min-width:76px;text-align:right}
+main{padding:18px 22px 28px;max-width:1800px;margin:auto}.tab{display:none}.tab.active{display:block}.card{background:linear-gradient(180deg,rgba(18,24,34,.98),rgba(13,18,26,.98));border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+.section-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}.section-head h2{margin:0;font-size:13px;letter-spacing:.08em;text-transform:uppercase}.eyebrow{color:var(--accent);font:11px/1.2 ui-monospace,monospace;letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px}.muted{color:var(--muted)}
+.notice{border:1px solid rgba(122,162,255,.25);background:rgba(122,162,255,.07);color:#b8c6e7;border-radius:8px;padding:9px 12px;font-size:12px}.overview-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.overview-grid .wide{grid-column:1/-1}.pad{padding:15px 17px}
+.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:11px 14px;margin-bottom:12px}.control{display:flex;align-items:center;gap:7px;color:var(--muted)}
+select,input[type=number]{background:#0a0f16;color:var(--text);border:1px solid var(--line);border-radius:7px;padding:6px 9px;outline:none}select:focus,input:focus{border-color:var(--accent)}
+.toggle{display:inline-flex;align-items:center;gap:6px;padding:5px 8px;border-radius:7px;border:1px solid var(--line);cursor:pointer;color:var(--muted);user-select:none}.toggle input{accent-color:var(--accent)}
+.action{background:transparent;border:1px solid var(--line);color:var(--text);border-radius:7px;padding:6px 10px;cursor:pointer}.action:hover{border-color:var(--accent);color:var(--accent)}
+.arc-grid{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(300px,.8fr);grid-template-rows:minmax(570px,67vh) auto;gap:12px}.plot-card{position:relative;overflow:hidden}.plot-wrap{height:100%;min-height:560px}.plot-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);pointer-events:none}.plot-meta{position:absolute;left:14px;top:12px;z-index:5;padding:7px 9px;background:rgba(8,11,16,.74);border:1px solid var(--line);border-radius:7px;color:var(--muted);font-size:11px;backdrop-filter:blur(10px)}
+.inspector{padding:16px;overflow:auto}.inspector h3{font-size:19px;line-height:1.25;margin:3px 0 5px}.chips{display:flex;gap:6px;flex-wrap:wrap;margin:11px 0}.chip{padding:3px 7px;border:1px solid var(--line);background:#0b1119;border-radius:999px;color:#b8c3d4;font-size:11px}.chip.phase{border-color:rgba(84,214,210,.35);color:var(--cyan)}
+.kv{display:grid;grid-template-columns:112px 1fr;gap:6px 10px;padding:12px 0;border-top:1px solid var(--line)}.kv dt{color:var(--muted)}.kv dd{margin:0;word-break:break-word}.metric{padding:9px 10px;border-radius:8px;background:#0a0f16;border:1px solid var(--line);margin:7px 0}.metric strong{display:block;font-size:16px}.metric span{color:var(--muted);font-size:11px}.why{border-left:2px solid var(--accent);padding:8px 10px;margin:10px 0;background:rgba(122,162,255,.06)}
+.neighbor{display:block;width:100%;text-align:left;padding:8px 9px;margin:5px 0;background:#0a0f16;border:1px solid var(--line);border-radius:8px;color:var(--text);cursor:pointer}.neighbor:hover{border-color:var(--accent)}.neighbor small{display:block;color:var(--muted)}
+.timeline-card{grid-column:1/-1;padding:14px 16px;overflow:hidden}.timeline{display:flex;gap:8px;overflow-x:auto;padding:4px 1px 8px}.beat{position:relative;min-width:190px;max-width:240px;padding:11px 12px;border:1px solid var(--line);border-radius:9px;background:#0a0f16;cursor:pointer}.beat:hover,.beat.selected{border-color:var(--accent)}.beat:after{content:"→";position:absolute;right:-13px;top:28px;color:#536071}.beat:last-child:after{display:none}.beat .date{font:10px ui-monospace,monospace;color:var(--muted)}.beat .phase{color:var(--cyan);font-size:10px;text-transform:uppercase;letter-spacing:.06em}.beat strong{display:block;margin:4px 0;line-height:1.25}.gap{border-style:dashed;opacity:.65}
+.legend{display:flex;gap:13px;flex-wrap:wrap;color:var(--muted);font-size:11px}.legend span:before{content:"";width:15px;height:2px;display:inline-block;vertical-align:middle;margin-right:5px;background:var(--accent)}.legend .causal:before{background:var(--amber)}.legend .temporal:before{background:var(--cyan)}.legend .neighbor-key:before{background:#506078}.legend .inferred:before{height:0;border-top:2px dashed var(--purple);background:transparent}
+table{width:100%;border-collapse:collapse}th{text-align:left;color:var(--muted);font-weight:500;border-bottom:1px solid var(--line);padding:6px 8px}td{padding:7px 8px;border-bottom:1px solid rgba(34,44,57,.55);vertical-align:top}.badge{padding:2px 7px;border-radius:99px;font-size:11px}.completed{background:#163322;color:var(--green)}.processing,.queued{background:#352e18;color:var(--amber)}.failed{background:#3a1c20;color:var(--red)}.duplicate{background:#2d2040;color:var(--purple)}progress{width:85px;height:7px;accent-color:var(--accent)}
+.arc-list-item{margin:0 0 17px}.arc-name{display:flex;justify-content:space-between;margin-bottom:6px}.lane{display:flex;gap:4px}.lane .phase{flex:1;height:23px;border:1px solid var(--line);border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:10px}.lane .covered{border-color:var(--accent);background:rgba(122,162,255,.12);color:#9db9ff}.eps{margin-top:6px;color:var(--muted);font-size:11px}.empty{padding:14px;color:var(--muted);font-style:italic}
+@media(max-width:1000px){.arc-grid{grid-template-columns:1fr;grid-template-rows:520px auto auto}.timeline-card{grid-column:auto}.overview-grid{grid-template-columns:1fr}.overview-grid .wide{grid-column:auto}.stats .optional{display:none}}@media(max-width:700px){header{padding:0 12px;gap:10px}.brand{font-size:11px}.nav button{padding:0 8px}.stats{display:none}main{padding:10px}.controls{align-items:flex-start}.arc-grid{grid-template-rows:440px auto auto}.plot-wrap{min-height:430px}}
 </style>
 </head>
-<body>
+<body><div class="shell">
 <header>
-  <h1>NARRATIVE ENGINE</h1>
-  <span class="stat">episodes <b id="stat-episodes">–</b></span>
-  <span class="stat">arc instances <b id="stat-instances">–</b></span>
-  <span class="stat">documents <b id="stat-documents">–</b></span>
-  <span class="stat">pending reviews <b id="stat-reviews">–</b></span>
-  <span class="stat" id="stat-updated"></span>
+  <div class="brand">NARRATIVE ENGINE <i>●</i></div>
+  <nav class="nav"><button data-tab="arc-space" class="active">Arc Space</button><button data-tab="overview">Operations</button></nav>
+  <div class="stats"><span>episodes <b id="stat-episodes">–</b></span><span class="optional">arcs <b id="stat-instances">–</b></span><span class="optional">reviews <b id="stat-reviews">–</b></span><span class="updated" id="stat-updated"></span></div>
 </header>
 <main>
-  <section class="wide">
-    <h2>Arc instances — phase coverage</h2>
-    <div id="arcs"><div class="empty">No arc instances yet. Drop sources into data/raw/ and let extraction + composition run.</div></div>
-  </section>
-  <section>
-    <h2>Processing queue</h2>
-    <div id="queue"></div>
-  </section>
-  <section>
-    <h2>Review queue — human ratifies structure</h2>
-    <div id="review"></div>
-  </section>
-</main>
-<footer>
-  Drop files into <code>data/raw/</code>. Duplicates (same bytes, any filename) are rejected at the door.
-  Filled phase segments are documented by at least one episode; hollow segments are coverage gaps.
-  Purple episodes are <i>inferred</i> links (composed, not textually attested).
-</footer>
+<section id="tab-arc-space" class="tab active">
+  <div class="notice" style="margin-bottom:12px"><b>Interpretation note.</b> Position is a 3D PCA projection for exploration. Neighbor ranking and displayed similarity values are calculated in the original 384-dimensional structural space.</div>
+  <div class="card controls">
+    <label class="control">Arc <select id="filter-arc"><option value="">All arc types</option></select></label>
+    <label class="control">Phase <select id="filter-phase"><option value="">All phases</option></select></label>
+    <label class="control">Neighbors <input id="filter-k" type="number" min="1" max="10" value="3" style="width:54px"></label>
+    <label class="toggle"><input id="show-trajectories" type="checkbox" checked> Arc trajectories</label>
+    <label class="toggle"><input id="show-causal" type="checkbox" checked> Evidence links</label>
+    <label class="toggle"><input id="show-neighbors" type="checkbox"> kNN links</label>
+    <button class="action" id="reset-view">Reset view</button>
+    <span class="muted" id="space-count"></span>
+  </div>
+  <div class="arc-grid">
+    <div class="card plot-card"><div class="plot-meta" id="projection-meta">loading projection…</div><div id="arc-plot" class="plot-wrap"></div><div id="plot-empty" class="plot-empty" hidden>No structural embeddings available yet.</div></div>
+    <aside class="card inspector" id="inspector"><div class="eyebrow">Evidence inspector</div><h3>Select an episode</h3><p class="muted">Click a node to inspect its classification, mechanisms, source provenance, and nearest structural analogs.</p></aside>
+    <div class="card timeline-card"><div class="section-head"><div><div class="eyebrow">Narrative progression</div><h2 id="timeline-title">Chronological episodes</h2></div><div class="legend"><span>attested arc</span><span class="inferred">inferred arc</span><span class="causal">causal</span><span class="temporal">temporal / same-event</span><span class="neighbor-key">neighbor</span></div></div><div class="timeline" id="timeline"></div></div>
+  </div>
+</section>
+<section id="tab-overview" class="tab">
+  <div class="overview-grid">
+    <div class="card pad wide"><div class="section-head"><div><div class="eyebrow">Composition</div><h2>Arc instances · phase coverage</h2></div></div><div id="arcs"><div class="empty">No arc instances yet.</div></div></div>
+    <div class="card pad"><div class="section-head"><div><div class="eyebrow">Ingestion</div><h2>Processing queue</h2></div></div><div id="queue"></div></div>
+    <div class="card pad"><div class="section-head"><div><div class="eyebrow">Human review</div><h2>Pending structural claims</h2></div></div><div id="review"></div></div>
+  </div>
+</section>
+</main></div>
 <script>
-const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
-  (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-
-async function fetchJSON(url, opts) {
-  const res = await fetch(url, opts);
-  if (!res.ok) throw new Error(url + " -> " + res.status);
-  return res.json();
-}
-
-function renderHealth(h) {
-  $("stat-episodes").textContent = h.episodes;
-  $("stat-instances").textContent = h.arc_instances;
-  $("stat-documents").textContent = h.documents;
-  $("stat-reviews").textContent = h.pending_reviews;
-  $("stat-updated").textContent = "updated " + new Date().toLocaleTimeString();
-}
-
-function renderQueue(docs) {
-  if (!docs.length) { $("queue").innerHTML = '<div class="empty">Nothing processed yet.</div>'; return; }
-  const rows = docs.map(d => `
-    <tr>
-      <td>${esc(d.filename)}${d.duplicate_of ? ' <span class="dim">(dup)</span>' : ""}</td>
-      <td><span class="badge ${esc(d.status)}">${esc(d.status)}</span></td>
-      <td class="dim">${d.status === "processing" && d.chunks_created > 0
-          ? `<progress max="${d.chunks_created}" value="${d.chunks_processed}"></progress> ${d.chunks_processed}/${d.chunks_created} ch · ${d.episodes_created} ep`
-          : `${d.chunks_created} ch / ${d.episodes_created} ep${d.extraction_ran ? "" : d.status === "completed" ? " · extraction pending (no LLM key)" : ""}`}</td>
-      <td class="dim">${d.error ? esc(d.error) : ""}
-          ${d.status === "failed" || (d.status === "completed" && !d.extraction_ran)
-            ? `<button onclick="retryDoc('${d.id}')">${d.status === "failed" ? "retry" : "extract"}</button>` : ""}</td>
-    </tr>`).join("");
-  $("queue").innerHTML = `<table>
-    <tr><th>file</th><th>status</th><th>progress</th><th>note</th></tr>${rows}</table>`;
-}
-
-function renderArcs(arcs) {
-  if (!arcs.length) return; // keep the empty-state message
-  $("arcs").innerHTML = arcs.map(a => {
-    const phases = a.expected_phases.length ? a.expected_phases
-      : [...new Set(a.episodes.map(e => e.phase).filter(Boolean))];
-    const lane = phases.map(p =>
-      `<div class="phase ${a.covered_phases.includes(p) ? "covered" : ""}">${esc(p)}</div>`
-    ).join("");
-    const eps = a.episodes.map(e =>
-      `<span class="${e.link_status === "inferred" ? "inferred" : ""}" title="${esc(e.phase || "")} ${esc(e.start_date || "")}">● ${esc(e.title)}</span>`
-    ).join(" &nbsp; ");
-    return `<div class="arc">
-      <div class="name">${esc(a.name)} <span class="scope">[${esc(a.scope_id || "unscoped")}]</span></div>
-      <div class="lane">${lane}</div>
-      <div class="eps">${eps}</div>
-    </div>`;
-  }).join("");
-}
-
-function renderReview(q) {
-  const items = [];
-  for (const m of q.memberships) {
-    items.push(`<tr>
-      <td>membership</td>
-      <td>${esc(m.episode)} <span class="dim">→</span> ${esc(m.cycle)} <span class="dim">(${esc(m.link_status)})</span></td>
-      <td>
-        <button onclick="review('membership','${m.id}','approved')">approve</button>
-        <button class="reject" onclick="review('membership','${m.id}','rejected')">reject</button>
-      </td></tr>`);
-  }
-  for (const l of q.links) {
-    items.push(`<tr>
-      <td>${esc(l.edge_kind)}</td>
-      <td>${esc(l.source)} <span class="dim">→</span> ${esc(l.target)} <span class="dim">(${esc(l.link_status)})</span></td>
-      <td>
-        <button onclick="review('link','${l.id}','approved')">approve</button>
-        <button class="reject" onclick="review('link','${l.id}','rejected')">reject</button>
-      </td></tr>`);
-  }
-  $("review").innerHTML = items.length
-    ? `<table><tr><th>kind</th><th>proposal</th><th></th></tr>${items.join("")}</table>`
-    : '<div class="empty">Nothing awaiting review.</div>';
-}
-
-async function retryDoc(id) {
-  await fetchJSON(`/api/documents/${id}/retry`, {method: "POST"});
-  refresh();
-}
-
-async function review(kind, id, decision) {
-  await fetchJSON(`/api/review/${kind}/${id}`, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({decision}),
-  });
-  refresh();
-}
-
-async function refresh() {
-  try {
-    const [health, docs, arcs, queue] = await Promise.all([
-      fetchJSON("/api/health"), fetchJSON("/api/documents"),
-      fetchJSON("/api/arc-instances"), fetchJSON("/api/review-queue"),
-    ]);
-    renderHealth(health); renderQueue(docs); renderArcs(arcs); renderReview(queue);
-  } catch (err) {
-    $("stat-updated").textContent = "refresh failed: " + err.message;
-  }
-}
-
-refresh();
-setInterval(refresh, 3000);
+const $=id=>document.getElementById(id);const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const COLORS=['#7aa2ff','#54d6d2','#b794f6','#e7ba62','#65d391','#f07979','#5eb0ef','#e28fcb','#9bbb5a','#d5915b','#8b9aad','#c1a0ff'];
+let space={nodes:[],edges:[],projection:null},selectedNode=null,selectedArc=null,plotInitialized=false;
+async function fetchJSON(url,opts){const r=await fetch(url,opts);if(!r.ok)throw new Error(`${url} → ${r.status}`);return r.json()}
+function colorFor(value){const values=[...new Set(space.nodes.map(n=>n.arc_type||'unclassified'))].sort();return COLORS[Math.max(0,values.indexOf(value||'unclassified'))%COLORS.length]}
+function nodeById(id){return space.nodes.find(n=>n.id===id)}
+function visibleNodes(){const arc=$('filter-arc').value,phase=$('filter-phase').value;return space.nodes.filter(n=>(!arc||n.arc_type===arc)&&(!phase||n.phase===phase))}
+function fillFilters(){const fill=(id,values,label)=>{const el=$(id),current=el.value;el.innerHTML=`<option value="">${label}</option>`+values.filter(Boolean).sort().map(v=>`<option value="${esc(v)}">${esc(v.replaceAll('_',' '))}</option>`).join('');el.value=current};fill('filter-arc',[...new Set(space.nodes.map(n=>n.arc_type))],'All arc types');fill('filter-phase',[...new Set(space.nodes.map(n=>n.phase))],'All phases')}
+function edgeVisible(e,ids){if(!ids.has(e.source)||!ids.has(e.target))return false;if(e.kind==='arc_sequence')return $('show-trajectories').checked;if(e.kind==='structural_neighbor')return $('show-neighbors').checked&&(selectedNode?e.source===selectedNode||e.target===selectedNode:true);return $('show-causal').checked}
+function edgeTrace(edges,kind,color,dash,width){const x=[],y=[],z=[],text=[];for(const e of edges){const a=nodeById(e.source),b=nodeById(e.target);if(!a||!b)continue;x.push(a.x,b.x,null);y.push(a.y,b.y,null);z.push(a.z,b.z,null);text.push('',e.explanation?.summary||kind,'')}return {type:'scatter3d',mode:'lines',x,y,z,text,hoverinfo:'text',name:kind,line:{color,width,dash},showlegend:false}}
+function renderPlot(reset=false){const nodes=visibleNodes(),ids=new Set(nodes.map(n=>n.id));$('space-count').textContent=`${nodes.length} episodes · ${space.edges.filter(e=>edgeVisible(e,ids)).length} visible links`;$('plot-empty').hidden=nodes.length>0;if(!nodes.length){Plotly.purge('arc-plot');return}
+ const groups={};nodes.forEach(n=>(groups[n.arc_type||'unclassified']??=[]).push(n));const traces=[];
+ const edges=space.edges.filter(e=>edgeVisible(e,ids));
+ const pending=e=>e.review_status==='pending', inferred=e=>e.link_status==='inferred';
+ traces.push(edgeTrace(edges.filter(e=>e.kind==='structural_neighbor'),'structural neighbors','#46566b','dot',1));
+ traces.push(edgeTrace(edges.filter(e=>e.kind==='arc_sequence'&&!inferred(e)&&!pending(e)),'attested arc · approved','#7aa2ff','solid',4));
+ traces.push(edgeTrace(edges.filter(e=>e.kind==='arc_sequence'&&!inferred(e)&&pending(e)),'attested arc · pending','#7aa2ff','dot',3));
+ traces.push(edgeTrace(edges.filter(e=>e.kind==='arc_sequence'&&inferred(e)),'inferred arc','#b794f6','dash',3));
+ traces.push(edgeTrace(edges.filter(e=>e.kind==='causes'&&!pending(e)),'causal · approved','#e7ba62','solid',3));
+ traces.push(edgeTrace(edges.filter(e=>e.kind==='causes'&&pending(e)),'causal · pending','#e7ba62','dot',2));
+ traces.push(edgeTrace(edges.filter(e=>e.kind==='precedes'&&!pending(e)),'temporal · approved','#54d6d2','solid',2));
+ traces.push(edgeTrace(edges.filter(e=>e.kind==='precedes'&&pending(e)),'temporal · pending','#54d6d2','dot',2));
+ traces.push(edgeTrace(edges.filter(e=>e.kind==='same_event_as'&&!pending(e)),'same event · approved','#65d391','solid',3));
+ traces.push(edgeTrace(edges.filter(e=>e.kind==='same_event_as'&&pending(e)),'same event · pending','#65d391','dot',2));
+ traces.push(edgeTrace(edges.filter(e=>!['structural_neighbor','arc_sequence','causes','precedes','same_event_as'].includes(e.kind)),'other evidence','#8894a6','dot',2));
+ for(const [arc,items] of Object.entries(groups)){traces.push({type:'scatter3d',mode:'markers',name:arc.replaceAll('_',' '),x:items.map(n=>n.x),y:items.map(n=>n.y),z:items.map(n=>n.z),customdata:items.map(n=>n.id),text:items.map(n=>`<b>${esc(n.title)}</b><br>${esc(n.phase||'unclassified')} · ${(n.confidence*100).toFixed(0)}%<br>${esc(n.start_date?.slice(0,10)||'undated')}`),hovertemplate:'%{text}<extra></extra>',marker:{size:items.map(n=>selectedNode===n.id?12:Math.max(5,6+n.confidence*4)),color:colorFor(arc),opacity:items.map(n=>selectedNode&&!isConnected(n.id,selectedNode)?.28:.92),line:{color:'#e8eef8',width:items.map(n=>selectedNode===n.id?2:0)}}})}
+ const layout={paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',margin:{l:0,r:0,t:0,b:0},font:{color:'#9aa6b7',family:'Inter,system-ui'},legend:{x:.02,y:.02,bgcolor:'rgba(8,11,16,.7)',bordercolor:'#222c39',borderwidth:1,font:{size:10}},scene:{bgcolor:'rgba(0,0,0,0)',xaxis:axis(),yaxis:axis(),zaxis:axis(),camera:reset?{eye:{x:1.45,y:1.45,z:1.1}}:undefined},uirevision:reset?Date.now():'arc-space'};
+ Plotly.react('arc-plot',traces,layout,{responsive:true,displaylogo:false,modeBarButtonsToRemove:['toImage','sendDataToCloud']});if(!plotInitialized){$('arc-plot').on('plotly_click',ev=>{const id=ev.points?.[0]?.customdata;if(id)selectNode(id)});plotInitialized=true}}
+function axis(){return {title:'',showgrid:true,gridcolor:'#1b2430',zeroline:false,showticklabels:false,showspikes:false}}
+function isConnected(a,b){return a===b||space.edges.some(e=>(e.source===a&&e.target===b)||(e.source===b&&e.target===a))}
+function selectNode(id){selectedNode=id;const n=nodeById(id);if(!n)return;selectedArc=n.arc_instances?.[0]?.id||null;renderInspector(n);renderTimeline();renderPlot()}
+function renderInspector(n){const related=space.edges.filter(e=>e.kind==='structural_neighbor'&&(e.source===n.id||e.target===n.id)).sort((a,b)=>(b.structural_similarity||0)-(a.structural_similarity||0));const arcs=(n.arc_instances||[]).map(a=>`<div class="metric"><strong>${esc(a.name)}</strong><span>${esc(a.link_status)} · review ${esc(a.review_status)}</span></div>`).join('');$('inspector').innerHTML=`<div class="eyebrow">Episode evidence</div><h3>${esc(n.title)}</h3><div class="muted">${esc(n.start_date?.slice(0,10)||'Undated')} · ${esc(n.location||n.scope_id||'Unscoped')}</div><div class="chips"><span class="chip">${esc((n.arc_type||'unclassified').replaceAll('_',' '))}</span><span class="chip phase">${esc((n.phase||'unknown phase').replaceAll('_',' '))}</span>${n.mechanisms.map(m=>`<span class="chip">${esc(m.replaceAll('_',' '))}</span>`).join('')}</div><p>${esc(n.summary)}</p><dl class="kv"><dt>Classification</dt><dd>${(n.confidence*100).toFixed(0)}% · ${esc(n.classification_state)}</dd><dt>Projection</dt><dd>Visual approximation only</dd><dt>Source chunks</dt><dd>${n.source_chunks.length?n.source_chunks.map(esc).join(', '):'not recorded'}</dd></dl><div class="eyebrow">Arc membership</div>${arcs||'<p class="muted">No composed arc membership.</p>'}<div class="eyebrow" style="margin-top:16px">Why nearby?</div>${related.length?related.slice(0,6).map(e=>{const other=nodeById(e.source===n.id?e.target:e.source);return `<button class="neighbor" onclick="selectNode('${other.id}')"><b>${esc(other.title)}</b><small>structural ${(e.structural_similarity*100).toFixed(1)}%${e.surface_similarity!=null?` · surface ${(e.surface_similarity*100).toFixed(1)}%`:''}</small><small>${esc(e.explanation?.summary||'')}</small></button>`}).join(''):'<p class="muted">No neighbors in the current view.</p>'}`}
+function renderTimeline(){let nodes=visibleNodes();let title='Chronological episodes';if(selectedArc){nodes=nodes.filter(n=>n.arc_instances.some(a=>a.id===selectedArc));const arc=space.nodes.flatMap(n=>n.arc_instances).find(a=>a.id===selectedArc);title=arc?.name||'Selected arc'}nodes.sort((a,b)=>(a.start_date||'9999').localeCompare(b.start_date||'9999'));const total=nodes.length;if(!selectedArc&&nodes.length>80)nodes=nodes.slice(0,80);$('timeline-title').textContent=title+(total>nodes.length?` · first ${nodes.length} of ${total}`:'');$('timeline').innerHTML=nodes.length?nodes.map(n=>`<div class="beat ${n.id===selectedNode?'selected':''}" onclick="selectNode('${n.id}')"><div class="date">${esc(n.start_date?.slice(0,10)||'undated')}</div><div class="phase">${esc((n.phase||'phase unknown').replaceAll('_',' '))}</div><strong>${esc(n.title)}</strong><span class="muted">${esc((n.arc_type||'unclassified').replaceAll('_',' '))}</span></div>`).join(''):'<div class="empty">No episodes match the filters.</div>'}
+function renderHealth(h){$('stat-episodes').textContent=h.episodes;$('stat-instances').textContent=h.arc_instances;$('stat-reviews').textContent=h.pending_reviews;$('stat-updated').textContent=new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}
+function renderQueue(docs){$('queue').innerHTML=docs.length?`<table><tr><th>file</th><th>status</th><th>progress</th><th></th></tr>${docs.map(d=>`<tr><td>${esc(d.filename)}</td><td><span class="badge ${esc(d.status)}">${esc(d.status)}</span></td><td class="muted">${d.status==='processing'&&d.chunks_created?`<progress max="${d.chunks_created}" value="${d.chunks_processed}"></progress> ${d.chunks_processed}/${d.chunks_created}`:`${d.chunks_created} ch · ${d.episodes_created} ep`}</td><td>${d.status==='failed'||(d.status==='completed'&&!d.extraction_ran)?`<button class="action" onclick="retryDoc('${d.id}')">retry</button>`:''}</td></tr>`).join('')}</table>`:'<div class="empty">Nothing processed yet.</div>'}
+function renderArcs(arcs){$('arcs').innerHTML=arcs.length?arcs.map(a=>{const phases=a.expected_phases.length?a.expected_phases:[...new Set(a.episodes.map(e=>e.phase).filter(Boolean))];return `<div class="arc-list-item"><div class="arc-name"><b>${esc(a.name)}</b><span class="muted">${esc(a.scope_id||'unscoped')}</span></div><div class="lane">${phases.map(p=>`<div class="phase ${a.covered_phases.includes(p)?'covered':''}">${esc(p.replaceAll('_',' '))}</div>`).join('')}</div><div class="eps">${a.episodes.map(e=>`● ${esc(e.title)}`).join(' &nbsp; ')}</div></div>`}).join(''):'<div class="empty">No arc instances yet.</div>'}
+function renderReview(q){const actions=(kind,id)=>`<button class="action" onclick="review('${kind}','${id}','approved')">approve</button> <button class="action" onclick="review('${kind}','${id}','rejected')">reject</button>`;const rows=[...q.memberships.map(m=>`<tr><td>membership</td><td>${esc(m.episode)} → ${esc(m.cycle)}</td><td>${actions('membership',m.id)}</td></tr>`),...q.links.map(l=>`<tr><td>${esc(l.edge_kind)}</td><td>${esc(l.source)} → ${esc(l.target)}</td><td>${actions('link',l.id)}</td></tr>`)];$('review').innerHTML=rows.length?`<table><tr><th>kind</th><th>proposal</th><th></th></tr>${rows.join('')}</table>`:'<div class="empty">Nothing awaiting review.</div>'}
+async function retryDoc(id){await fetchJSON(`/api/documents/${id}/retry`,{method:'POST'});refreshOperations()}async function review(kind,id,decision){await fetchJSON(`/api/review/${kind}/${id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({decision})});refreshOperations()}
+async function refreshSpace(){try{space=await fetchJSON(`/api/arc-space?k=${$('filter-k').value}`);fillFilters();$('projection-meta').textContent=`PCA · ${space.nodes.length} nodes · variance ${space.projection.explained_variance.map(v=>(v*100).toFixed(0)+'%').join(' / ')}`;renderPlot(true);renderTimeline();if(selectedNode&&nodeById(selectedNode))renderInspector(nodeById(selectedNode))}catch(e){$('projection-meta').textContent='Arc Space failed: '+e.message}}
+async function refreshOperations(){try{const [h,d,a,q]=await Promise.all([fetchJSON('/api/health'),fetchJSON('/api/documents'),fetchJSON('/api/arc-instances'),fetchJSON('/api/review-queue')]);renderHealth(h);renderQueue(d);renderArcs(a);renderReview(q)}catch(e){$('stat-updated').textContent='error'}}
+document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.nav button').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));$('tab-'+b.dataset.tab).classList.add('active');if(b.dataset.tab==='arc-space')setTimeout(()=>Plotly.Plots.resize('arc-plot'),20)});['filter-arc','filter-phase','show-trajectories','show-causal','show-neighbors'].forEach(id=>$(id).onchange=()=>{renderPlot();renderTimeline()});$('filter-k').onchange=refreshSpace;$('reset-view').onclick=()=>{selectedNode=null;selectedArc=null;$('inspector').innerHTML='<div class="eyebrow">Evidence inspector</div><h3>Select an episode</h3><p class="muted">Click a node to inspect why it belongs and what it resembles.</p>';renderPlot(true);renderTimeline()};
+refreshOperations();refreshSpace();setInterval(refreshOperations,5000);
 </script>
-</body>
-</html>
+</body></html>
