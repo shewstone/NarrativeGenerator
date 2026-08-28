@@ -209,6 +209,13 @@ class OpenAIClient(LLMClient):
         max_tokens = max_tokens or self.config.max_tokens
 
         try:
+            provider_options: Dict[str, Any] = {}
+            if self.config.reasoning_effort:
+                # extra_body works with SDK versions whose typed Chat
+                # Completions signature does not expose Venice's extension.
+                provider_options["extra_body"] = {
+                    "reasoning_effort": self.config.reasoning_effort,
+                }
             response = await self.client.chat.completions.create(
                 model=model,
                 messages=[
@@ -221,8 +228,15 @@ class OpenAIClient(LLMClient):
                 temperature=temperature,
                 max_tokens=max_tokens,
                 response_format={"type": "json_object"} if response_format else None,
+                **provider_options,
             )
 
+            finish_reason = response.choices[0].finish_reason
+            if finish_reason == "length":
+                raise LLMError(
+                    f"Response truncated at max_tokens={max_tokens} (model={model}); "
+                    "raise NE_LLM_MAX_TOKENS or lower reasoning effort"
+                )
             content = response.choices[0].message.content
             if not content:
                 raise LLMError("Empty response from OpenAI")

@@ -22,6 +22,10 @@ class LLMConfig:
     max_tokens: int = 4000
     api_key: Optional[str] = None
     base_url: Optional[str] = None
+    # Venice reasoning models otherwise spend tokens narrating simple JSON
+    # decisions and may leave message.content empty. Omit this for providers
+    # or models that do not support the OpenAI-compatible extension.
+    reasoning_effort: Optional[str] = None
 
     @classmethod
     def from_env(cls, prefix: str = "NE_") -> LLMConfig:
@@ -47,6 +51,7 @@ class LLMConfig:
             max_tokens=int(os.getenv(f"{prefix}LLM_MAX_TOKENS", "4000")),
             api_key=os.getenv(f"{prefix}LLM_API_KEY") or (os.getenv(provider_api_key) if provider_api_key else None),
             base_url=os.getenv(f"{prefix}LLM_BASE_URL") or os.getenv("OPENAI_BASE_URL"),
+            reasoning_effort=os.getenv(f"{prefix}LLM_REASONING_EFFORT") or None,
         )
 
 

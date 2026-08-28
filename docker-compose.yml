@@ -26,6 +26,7 @@ services:
       NE_LLM_PROVIDER: ${NE_LLM_PROVIDER:-openai}
       NE_LLM_BASE_URL: ${NE_LLM_BASE_URL:-https://api.venice.ai/api/v1}
       NE_LLM_MODEL: ${NE_LLM_MODEL:-zai-org-glm-5-1}
+      NE_LLM_REASONING_EFFORT: ${NE_LLM_REASONING_EFFORT:-none}
       NE_SEG_MODEL: ${NE_SEG_MODEL:-zai-org-glm-4.7-flash}
       NE_EXTRACT_MODEL: ${NE_EXTRACT_MODEL:-zai-org-glm-5-1}
       NE_CLASSIFY_MODEL: ${NE_CLASSIFY_MODEL:-deepseek-v3.2}
@@ -58,6 +59,7 @@ services:
       NE_LLM_PROVIDER: ${NE_LLM_PROVIDER:-openai}
       NE_LLM_BASE_URL: ${NE_LLM_BASE_URL:-https://api.venice.ai/api/v1}
       NE_LLM_MODEL: ${NE_LLM_MODEL:-zai-org-glm-5-1}
+      NE_LLM_REASONING_EFFORT: ${NE_LLM_REASONING_EFFORT:-none}
       NE_SEG_MODEL: ${NE_SEG_MODEL:-zai-org-glm-4.7-flash}
       NE_EXTRACT_MODEL: ${NE_EXTRACT_MODEL:-zai-org-glm-5-1}
       NE_CLASSIFY_MODEL: ${NE_CLASSIFY_MODEL:-deepseek-v3.2}

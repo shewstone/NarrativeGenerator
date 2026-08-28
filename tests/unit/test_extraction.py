@@ -33,6 +33,7 @@ class TestLLMConfig:
         monkeypatch.setenv("NE_LLM_MODEL", "claude-3-opus")
         monkeypatch.setenv("NE_LLM_TEMPERATURE", "0.5")
         monkeypatch.setenv("NE_LLM_MAX_TOKENS", "8000")
+        monkeypatch.setenv("NE_LLM_REASONING_EFFORT", "none")
 
         config = LLMConfig.from_env()
 
@@ -40,6 +41,7 @@ class TestLLMConfig:
         assert config.model == "claude-3-opus"
         assert config.temperature == 0.5
         assert config.max_tokens == 8000
+        assert config.reasoning_effort == "none"
 
     def test_config_reads_openai_compatible_base_url(self, monkeypatch):
         monkeypatch.setenv("NE_LLM_BASE_URL", "https://api.venice.ai/api/v1")
@@ -180,6 +182,20 @@ class TestOpenAIClient:
         assert result["model"] == "gpt-4"
         assert result["usage"]["prompt_tokens"] == 100
         assert result["usage"]["total_tokens"] == 150
+
+    @pytest.mark.asyncio
+    async def test_complete_forwards_reasoning_effort(self, mock_openai_response):
+        """Test forwarding Venice's OpenAI-compatible reasoning extension."""
+        config = LLMConfig(api_key="test-key", reasoning_effort="none")
+        client = OpenAIClient(config)
+
+        mock_create = AsyncMock(return_value=mock_openai_response)
+        client.client = MagicMock()
+        client.client.chat.completions.create = mock_create
+
+        await client.complete("Test prompt")
+
+        assert mock_create.await_args.kwargs["extra_body"] == {"reasoning_effort": "none"}
 
     @pytest.mark.asyncio
     async def test_complete_with_json_parsing(self, mock_openai_response):
