@@ -3,7 +3,13 @@
 import pytest
 
 from narrative_engine.ingestion.chunker import Chunk, SmartChunker
-from narrative_engine.ingestion.models import IngestionConfig, ParsedDocument, SourceMetadata, SourceFormat, StructuralElement
+from narrative_engine.ingestion.models import (
+    IngestionConfig,
+    ParsedDocument,
+    SourceFormat,
+    SourceMetadata,
+    StructuralElement,
+)
 
 
 class TestSmartChunker:

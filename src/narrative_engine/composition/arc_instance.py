@@ -74,11 +74,13 @@ class ArcInstance(BaseModel):
 
     # Phase composition
     phases: Dict[ArcPhase, PhaseCoverage] = Field(default_factory=dict)
+    # Classified episodes can occasionally have no usable phase label. Keep
+    # them attached to the instance with empty phase coverage so composition
+    # never silently drops a source episode at persistence time.
+    unphased_episode_ids: List[UUID] = Field(default_factory=list)
 
     # Source coverage tracking
-    source_coverage: Dict[str, float] = Field(
-        default_factory=dict
-    )  # source_id -> coverage_ratio
+    source_coverage: Dict[str, float] = Field(default_factory=dict)  # source_id -> coverage_ratio
 
     # Composition status
     status: CompositionStatus = CompositionStatus.PENDING
@@ -94,11 +96,7 @@ class ArcInstance(BaseModel):
     @property
     def complete_phases(self) -> List[ArcPhase]:
         """Return phases with coverage above threshold."""
-        return [
-            phase
-            for phase, coverage in self.phases.items()
-            if coverage.coverage_score > 0.5
-        ]
+        return [phase for phase, coverage in self.phases.items() if coverage.coverage_score > 0.5]
 
     @property
     def overall_coverage(self) -> float:
@@ -152,9 +150,7 @@ class ArcInstance(BaseModel):
         for coverage in self.phases.values():
             for source_id in coverage.source_ids:
                 counts[source_id] = counts.get(source_id, 0) + 1
-        self.source_coverage = {
-            source_id: count / total_phases for source_id, count in counts.items()
-        }
+        self.source_coverage = {source_id: count / total_phases for source_id, count in counts.items()}
 
     def identify_gaps(self, expected_phases: List[ArcPhase]) -> List[str]:
         """Identify which expected phases are missing or under-covered."""
@@ -172,11 +168,7 @@ class ArcInstance(BaseModel):
         if not self.phases:
             self.status = CompositionStatus.FRAGMENTED
         elif self.coverage_gaps:
-            self.status = (
-                CompositionStatus.GAPS
-                if len(self.coverage_gaps) <= 2
-                else CompositionStatus.FRAGMENTED
-            )
+            self.status = CompositionStatus.GAPS if len(self.coverage_gaps) <= 2 else CompositionStatus.FRAGMENTED
         else:
             self.status = CompositionStatus.COMPLETE
         return self.status

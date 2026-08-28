@@ -72,7 +72,7 @@ def set_context(request_id: Optional[str] = None, episode_id: Optional[str] = No
 
 
 @contextmanager
-def LogTimer(operation: str, logger: Optional[structlog.stdlib.BoundLogger] = None):
+def LogTimer(operation: str, logger: Optional[structlog.stdlib.BoundLogger] = None):  # noqa: N802
     """Context manager to time and log operation duration.
 
     Args:

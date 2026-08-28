@@ -48,6 +48,8 @@ docker compose run --rm -v ./alembic:/app/alembic app alembic upgrade head
 ### Always-on server: drop directory + dashboard
 
 ```bash
+cp .env.example .env
+# Add your Venice key to NE_LLM_API_KEY in .env
 docker compose up -d server     # dashboard on http://localhost:8000
 ```
 
@@ -55,11 +57,30 @@ Drop books/articles into `data/raw/` — the watcher picks them up
 automatically (settled files only, so half-copied files are safe), guards
 against duplicates by content hash (same bytes under any filename become a
 visible `duplicate` row, never reprocessed), chunks them, and — when
-`OPENAI_API_KEY`/`ANTHROPIC_API_KEY` is set — extracts episodes, embeds
-them, and composes arc instances. The dashboard shows the processing
-queue, arc instances as phase lanes with coverage gaps visible, and the
-review queue where a human approves or rejects inferred structure
-(design doc §6.4). **No auth: localhost/dev use only.**
+`NE_LLM_API_KEY` is set — extracts episodes, embeds
+them, and composes trajectories. The primary ontology is scale-neutral:
+episodes receive a change pattern, personal-to-system scale, domain facets,
+six situation axes, mechanism families, and a hierarchical focal scope.
+That scope can be a party, faction, movement, idea, or discourse nested in a
+larger polity or civilization. The dashboard colors the graph by change
+pattern and filters it by scale, domain, and any parent/child scope; legacy
+arc labels remain available for compatibility. **No auth: localhost/dev use
+only.**
+
+See [Situation Ontology v1](docs/situation-ontology-v1.md) for the change
+patterns, subgroup treatment, evidence rules, and current hierarchy limits.
+
+The Docker configuration uses Venice's OpenAI-compatible API with
+`zai-org-glm-4.7-flash` for segmentation, `zai-org-glm-5-1` for structured
+extraction, and `deepseek-v3.2` for classification and linking. Override any
+stage with `NE_SEG_MODEL`, `NE_EXTRACT_MODEL`, `NE_CLASSIFY_MODEL`, or
+`NE_LINK_MODEL`. Pairwise linking always checks adjacent episodes; distant
+pairs must pass a cheap entity, place, time, or lexical prefilter. Its defaults
+can be tuned with `NE_LINK_NEIGHBOR_WINDOW`, `NE_LINK_MAX_YEAR_GAP`, and
+`NE_LINK_MIN_LEXICAL_OVERLAP`. `NE_TAU_SCOPE` (default `0.6`) prevents weak
+scope claims from becoming hard composition partitions; `NE_TAU_CLASS` and
+`NE_TAU_ROLE` apply the same no-forced-choice discipline to patterns and
+actor roles.
 
 ### Local installation
 
@@ -78,8 +99,8 @@ make tune-thresholds  # justify per-scale temporal thresholds against the fixtur
 make reembed          # bring stale-epoch embeddings to the current epoch
 ```
 
-The analog gate's baseline (2026-07-10, render-v0.8.0 + all-MiniLM-L6-v2):
-pair_recall@5 = 0.900, MRR = 0.777 over 30 cross-era pairs + 30 distractors.
+The analog gate's baseline (2026-08-28, render-v0.9.0 + all-MiniLM-L6-v2):
+pair_recall@5 = 0.900, MRR = 0.753 over 30 cross-era pairs + 30 distractors.
 The floor (0.85) is a ratchet: raise it when the render improves, never lower
 it to make a change pass.
 

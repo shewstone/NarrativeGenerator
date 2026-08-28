@@ -1,7 +1,5 @@
 """Tests for ingestion pipeline."""
 
-from pathlib import Path
-
 import pytest
 
 from narrative_engine.ingestion.models import IngestionConfig
@@ -53,9 +51,7 @@ class TestIngestionPipeline:
         """Ingest file extracts metadata."""
         md_file = tmp_path / "input" / "test.md"
         md_file.parent.mkdir()
-        md_file.write_text(
-            "---\ntitle: Test Document\nauthor: John Doe\n---\n\n# Chapter 1\nContent."
-        )
+        md_file.write_text("---\ntitle: Test Document\nauthor: John Doe\n---\n\n# Chapter 1\nContent.")
 
         output_dir = tmp_path / "output"
         result = pipeline.ingest_file(md_file, output_dir)
@@ -78,6 +74,17 @@ class TestIngestionPipeline:
 
         assert result.success is False
         assert result.errors
+
+    def test_ingest_empty_file_does_not_crash_output_stage(self, pipeline, tmp_path):
+        empty = tmp_path / "empty.txt"
+        empty.write_text("")
+
+        result = pipeline.ingest_file(empty, tmp_path / "output")
+
+        assert result.success is True
+        assert result.chunks_created == 0
+        assert result.output_files == []
+        assert result.warnings
 
     def test_ingest_directory(self, pipeline, tmp_path):
         """Ingest all files in a directory."""

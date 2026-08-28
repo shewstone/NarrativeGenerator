@@ -22,8 +22,8 @@ from tests.fixtures.analog_fixture import (
     all_fixture_episodes,
 )
 
-# Ratchet floor. Baseline observed 2026-07-10 with render-v0.8.0 +
-# all-MiniLM-L6-v2: pair_recall@5 = 0.900, MRR = 0.777 (60 rankings, 59
+# Ratchet floor. Baseline observed 2026-08-28 with render-v0.9.0 +
+# all-MiniLM-L6-v2: pair_recall@5 = 0.900, MRR = 0.753 (60 rankings, 59
 # alternatives each). Floor = baseline - 0.05 slack; raise it when the
 # render improves, never lower it to make a change pass.
 RECALL_AT_5_FLOOR = 0.85
@@ -43,7 +43,6 @@ def similarity_matrix():
 
 @pytest.mark.fixture_gate
 class TestAnalogFixtureGate:
-
     def test_pair_recall_at_k(self, similarity_matrix):
         episodes, sims = similarity_matrix
         index_of = {e.id: i for i, e in enumerate(episodes)}

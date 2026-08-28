@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from typing import List, Optional, Sequence
+from typing import Optional, Sequence
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from narrative_engine.taxonomy.models import (
-    ArcComparison,
     ArcMembership,
     ArcTaxonomy,
     CanonicalArc,
@@ -17,7 +16,6 @@ from narrative_engine.taxonomy.models import (
     TaxonomyStatus,
 )
 from narrative_engine.taxonomy.orm_models import (
-    ArcComparisonORM,
     ArcORM,
     ArcTaxonomyORM,
 )

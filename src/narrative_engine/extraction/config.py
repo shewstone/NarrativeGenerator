@@ -6,7 +6,7 @@ import os
 from dataclasses import dataclass
 from typing import Optional
 
-from narrative_engine.models import MechanismTag
+from narrative_engine.models import ChangePattern, MechanismFamily, MechanismTag
 
 
 @dataclass(frozen=True)
@@ -27,6 +27,10 @@ class LLMConfig:
     def from_env(cls, prefix: str = "NE_") -> LLMConfig:
         """Create config from environment variables."""
         provider = os.getenv(f"{prefix}LLM_PROVIDER", "anthropic")
+        provider_api_key = {
+            "anthropic": "ANTHROPIC_API_KEY",
+            "openai": "OPENAI_API_KEY",
+        }.get(provider)
 
         # Default models by provider (T9: Sonnet chosen 2026-07-11 —
         # near-Opus extraction quality at Sonnet cost; per-stage overrides
@@ -41,7 +45,7 @@ class LLMConfig:
             model=os.getenv(f"{prefix}LLM_MODEL", default_models.get(provider, "claude-sonnet-5")),
             temperature=float(os.getenv(f"{prefix}LLM_TEMPERATURE", "0.0")),
             max_tokens=int(os.getenv(f"{prefix}LLM_MAX_TOKENS", "4000")),
-            api_key=os.getenv(f"{prefix}LLM_API_KEY") or os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY"),
+            api_key=os.getenv(f"{prefix}LLM_API_KEY") or (os.getenv(provider_api_key) if provider_api_key else None),
             base_url=os.getenv(f"{prefix}LLM_BASE_URL") or os.getenv("OPENAI_BASE_URL"),
         )
 
@@ -83,8 +87,19 @@ class ExtractionPipelineConfig:
     # tau_class.
     role_fit_floor: float = 0.5
 
+    # Scope is a hard composition partition, so a wrong focal scope is more
+    # damaging than an unresolved one. Low-confidence claims remain visible
+    # on the episode but are not promoted to canonical scope ids.
+    scope_confidence_floor: float = 0.6
+
     # Entity resolution settings
     similarity_threshold: float = 0.85  # For same-event detection
+    # Always inspect nearby episodes. More distant pairs must share an actor,
+    # place, temporal window, or enough meaningful vocabulary before an LLM
+    # call is made, preventing quadratic all-pairs spend on obvious negatives.
+    linking_neighbor_window: int = 1
+    linking_max_year_gap: float = 25.0
+    linking_min_lexical_overlap: float = 0.2
 
     # Rate limiting
     max_requests_per_minute: int = 60
@@ -120,7 +135,24 @@ class ExtractionPipelineConfig:
             chunk_overlap_tokens=int(os.getenv(f"{prefix}CHUNK_OVERLAP", "500")),
             classification_confidence_floor=float(os.getenv(f"{prefix}TAU_CLASS", "0.5")),
             role_fit_floor=float(os.getenv(f"{prefix}TAU_ROLE", "0.5")),
+            scope_confidence_floor=float(os.getenv(f"{prefix}TAU_SCOPE", "0.6")),
+            linking_neighbor_window=int(os.getenv(f"{prefix}LINK_NEIGHBOR_WINDOW", "1")),
+            linking_max_year_gap=float(os.getenv(f"{prefix}LINK_MAX_YEAR_GAP", "25")),
+            linking_min_lexical_overlap=float(os.getenv(f"{prefix}LINK_MIN_LEXICAL_OVERLAP", "0.2")),
         )
+        if config.linking_neighbor_window < 0:
+            raise ValueError("LINK_NEIGHBOR_WINDOW must be non-negative")
+        if config.linking_max_year_gap < 0:
+            raise ValueError("LINK_MAX_YEAR_GAP must be non-negative")
+        if not 0.0 <= config.linking_min_lexical_overlap <= 1.0:
+            raise ValueError("LINK_MIN_LEXICAL_OVERLAP must be between 0 and 1")
+        for name, value in (
+            ("TAU_CLASS", config.classification_confidence_floor),
+            ("TAU_ROLE", config.role_fit_floor),
+            ("TAU_SCOPE", config.scope_confidence_floor),
+        ):
+            if not 0.0 <= value <= 1.0:
+                raise ValueError(f"{name} must be between 0 and 1")
         incompatible_prefix = "claude-" if provider == "openai" else "gpt-"
         for model in (
             config.segmentation_model,
@@ -137,9 +169,9 @@ class ExtractionPipelineConfig:
 class PromptVersions:
     """Versioned prompt templates."""
 
-    segmentation_version: str = "v1.0.0"
-    extraction_version: str = "v1.0.0"
-    classification_version: str = "v1.0.0"
+    segmentation_version: str = "v1.1.0"
+    extraction_version: str = "v2.0.0"
+    classification_version: str = "v2.0.0"
     linking_version: str = "v1.0.0"
 
 
@@ -147,6 +179,45 @@ class PromptVersions:
 # new version is a batch job, not a rewrite. Single source of truth so a
 # version bump doesn't require hunting down every literal.
 CURRENT_TAXONOMY_VERSION = "arc-v0.1.0"
+CURRENT_SITUATION_ONTOLOGY_VERSION = "situation-v1.0.0"
+
+# Primary, scale-neutral change vocabulary. These are deliberately phrased
+# without market, state, civilization, or literary-protagonist assumptions.
+CHANGE_PATTERN_DESCRIPTIONS = {
+    ChangePattern.EMERGENCE_AND_GATHERING.value: "A new identity, capability, or coalition takes shape",
+    ChangePattern.EXPANSION_AND_CONSOLIDATION.value: "Reach grows while gains, rules, or relationships are stabilized",
+    ChangePattern.SATURATION_AND_OVERREACH.value: "Growth meets limits and commitments exceed sustainable capacity",
+    ChangePattern.TENSION_AND_CONTESTATION.value: "Competing claims or pressures become active and visible",
+    ChangePattern.FRAGMENTATION_AND_RELEASE.value: "A previously held-together structure separates or disperses",
+    ChangePattern.RETREAT_AND_PRESERVATION.value: "Exposure is reduced to protect a viable core",
+    ChangePattern.TURNING_AND_REORIENTATION.value: "A threshold or reversal redirects attention, strategy, or identity",
+    ChangePattern.RENEWAL_AND_INTEGRATION.value: "Capacity and coherence are rebuilt in a revised form",
+    ChangePattern.SUCCESSION_AND_TRANSFER.value: "Authority, responsibility, memory, or resources pass to new holders",
+}
+
+MECHANISM_FAMILY_DESCRIPTIONS = {
+    MechanismFamily.AMPLIFICATION_FEEDBACK.value: "A change reinforces itself through a feedback loop",
+    MechanismFamily.RESOURCE_STRAIN.value: "Demand on time, energy, money, people, or material exceeds supply",
+    MechanismFamily.LEGITIMACY_EROSION.value: "Trust in a person, norm, leadership, or order declines",
+    MechanismFamily.COORDINATION_FAILURE.value: "Actors cannot align information, incentives, or action",
+    MechanismFamily.BOUNDARY_PRESSURE.value: "External conditions or neighboring actors stress the focal scope",
+    MechanismFamily.SUCCESSION_DYNAMICS.value: "Transfer of authority or identity creates rivalry or discontinuity",
+    MechanismFamily.INSTITUTIONAL_LOCK_IN.value: "Established commitments constrain adaptation",
+    MechanismFamily.ADAPTATION_LEARNING.value: "Feedback changes behavior, structure, or capability",
+    MechanismFamily.CONTAGION_DIFFUSION.value: "Ideas, behavior, confidence, or disruption spread between actors",
+    MechanismFamily.COOPERATION_ALIGNMENT.value: "Mutual adjustment increases shared capacity or cohesion",
+    MechanismFamily.COMPETITION_DISPLACEMENT.value: "One actor, practice, or coalition gains at another's expense",
+    MechanismFamily.MEMORY_LOSS.value: "Relevant experience or safeguards fade, allowing recurrence",
+}
+
+CONFIGURATION_DIMENSIONS = {
+    "capacity": "-1 depleted/constrained; +1 abundant/growing",
+    "cohesion": "-1 fragmented; +1 integrated",
+    "pressure": "-1 latent/low; +1 acute",
+    "legitimacy": "-1 contested; +1 accepted",
+    "adaptability": "-1 rigid; +1 flexible",
+    "agency": "-1 distributed; +1 concentrated",
+}
 
 # Default arc taxonomy for prompts
 DEFAULT_ARC_TAXONOMY = {

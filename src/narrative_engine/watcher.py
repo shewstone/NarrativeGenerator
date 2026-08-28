@@ -41,16 +41,25 @@ class ClaimLostError(RuntimeError):
 
 
 IGNORED_SUFFIXES = {".part", ".tmp", ".crdownload", ".swp"}
+HASH_CHUNK_SIZE = 1024 * 1024
+
+
+def _hash_file(path: Path) -> tuple[str, int]:
+    """Hash a file without retaining its complete contents in memory."""
+    digest = hashlib.sha256()
+    size_bytes = 0
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(HASH_CHUNK_SIZE), b""):
+            digest.update(chunk)
+            size_bytes += len(chunk)
+    return digest.hexdigest(), size_bytes
 
 
 def llm_configured() -> bool:
     """Extraction only runs when a model key is actually available; without
     one, files still ingest and the row says extraction_ran=False —
     visible degradation, never a silent skip."""
-    return any(
-        os.getenv(name)
-        for name in ("NE_LLM_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY")
-    )
+    return any(os.getenv(name) for name in ("NE_LLM_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"))
 
 
 @dataclass
@@ -78,6 +87,15 @@ class DocumentProcessor:
         self._extractor = extractor
         self._embedder = embedder
         self._lease_seconds = lease_seconds
+        self._owns_extractor = extractor is None
+
+    async def aclose(self) -> None:
+        """Release network resources owned by a lazily-created extractor."""
+        if not self._owns_extractor or self._extractor is None:
+            return
+        close = getattr(self._extractor, "aclose", None)
+        if close is not None:
+            await close()
 
     def _get_extractor(self):
         if self._extractor is None and llm_configured():
@@ -132,15 +150,12 @@ class DocumentProcessor:
                 claim_lost.set()
                 return
 
-    async def process_file(
-        self, session: AsyncSession, path: Path
-    ) -> Optional[SourceDocument]:
+    async def process_file(self, session: AsyncSession, path: Path) -> Optional[SourceDocument]:
         """Hash, dedupe-guard, and process one file. Returns the document
         row, or None when this (hash, filename) was already recorded."""
         repo = SourceDocumentRepository(session)
 
-        raw = path.read_bytes()
-        content_hash = hashlib.sha256(raw).hexdigest()
+        content_hash, size_bytes = _hash_file(path)
 
         existing = await repo.get_by_hash_and_filename(content_hash, path.name)
         if existing is not None:
@@ -158,7 +173,7 @@ class DocumentProcessor:
             document = SourceDocument(
                 filename=path.name,
                 content_hash=content_hash,
-                size_bytes=len(raw),
+                size_bytes=size_bytes,
                 status=SourceDocumentStatus.DUPLICATE,
                 duplicate_of=original.id,
                 error=f"Same content as {original.filename!r}; not reprocessed",
@@ -175,7 +190,7 @@ class DocumentProcessor:
             document = SourceDocument(
                 filename=path.name,
                 content_hash=content_hash,
-                size_bytes=len(raw),
+                size_bytes=size_bytes,
             )
             try:
                 async with session.begin_nested():
@@ -260,6 +275,10 @@ class DocumentProcessor:
 
         parsed = parser.parse(path)
         chunks = SmartChunker().chunk_document(parsed)
+        # ParsedDocument retains the full text plus per-section copies. Once
+        # chunking is complete, only the chunks are needed for the long LLM
+        # phase, so release that duplicate document-sized object promptly.
+        del parsed
         document.chunks_created = len(chunks)
         if not await repo.update_claimed(document, claim_token):
             raise ClaimLostError("document claim was replaced")
@@ -275,11 +294,7 @@ class DocumentProcessor:
         arc_types_seen = set()
         remaining_chunks = chunks[document.chunks_processed :]
         if not remaining_chunks:
-            arc_types_seen.update(
-                await episode_repo.get_arc_types_for_chunks(
-                    [chunk.chunk_id for chunk in chunks]
-                )
-            )
+            arc_types_seen.update(await episode_repo.get_arc_types_for_chunks([chunk.chunk_id for chunk in chunks]))
 
         for chunk in remaining_chunks:
             async with session.begin_nested():
@@ -322,8 +337,7 @@ class DocumentProcessor:
             composer = CompositionPipeline(session)
             for arc_type in arc_types_seen:
                 instances = await composer.compose_arc_instances(arc_type)
-                for instance in instances:
-                    await composer.persist_instance(instance, arc_type)
+                await composer.reconcile_instances(instances, arc_type)
 
         document.extraction_ran = True
 
@@ -374,15 +388,18 @@ async def watch_loop(config: Optional[WatcherConfig] = None) -> None:
         interval=config.interval_seconds,
         llm_configured=llm_configured(),
     )
-    while True:
-        try:
-            async with db_manager.session() as session:
-                touched = await scan_once(session, config, processor)
-            if touched:
-                logger.info("watcher_scan_complete", processed=len(touched))
-        except asyncio.CancelledError:
-            logger.info("watcher_stopped")
-            raise
-        except Exception as exc:  # DB hiccup etc. — the loop survives
-            logger.error("watcher_loop_error", error=str(exc))
-        await asyncio.sleep(config.interval_seconds)
+    try:
+        while True:
+            try:
+                async with db_manager.session() as session:
+                    touched = await scan_once(session, config, processor)
+                if touched:
+                    logger.info("watcher_scan_complete", processed=len(touched))
+            except asyncio.CancelledError:
+                logger.info("watcher_stopped")
+                raise
+            except Exception as exc:  # DB hiccup etc. — the loop survives
+                logger.error("watcher_loop_error", error=str(exc))
+            await asyncio.sleep(config.interval_seconds)
+    finally:
+        await processor.aclose()

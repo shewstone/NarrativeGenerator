@@ -15,7 +15,6 @@ from narrative_engine.models import utcnow
 from narrative_engine.storage.database import Base
 from narrative_engine.taxonomy.models import TaxonomyStatus, TaxonomyType
 
-
 # Association table for episode-arc membership (replaces hardcoded arc_type)
 episode_arc_membership = Table(
     "episode_arc_membership",

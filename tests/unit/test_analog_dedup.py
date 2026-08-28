@@ -4,18 +4,16 @@ Branch frequencies are counts over analogs; duplicate narrations of one
 happening must not count as independent evidence.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
 
 from narrative_engine.models import (
-    Continuation,
     EdgeKind,
     Episode,
     EpisodeLink,
     LinkStatus,
-    ThesisConfidence,
 )
 from narrative_engine.retrieval.analog_retrieval import (
     AnalogRetrievalEngine,
@@ -31,7 +29,7 @@ UTC = timezone.utc
 
 
 def _episode(**kwargs) -> Episode:
-    defaults = dict(title="Analog", summary="Analog summary")
+    defaults = {"title": "Analog", "summary": "Analog summary"}
     defaults.update(kwargs)
     return Episode(**defaults)
 
@@ -98,14 +96,14 @@ class TestSameEventHeuristic:
         return AnalogRetrievalEngine()
 
     def _pair(self, **overrides):
-        base = dict(
-            scope_id="US",
-            arc_type="credit_boom_and_bust",
-            start_date=datetime(1929, 9, 1, tzinfo=UTC),
-            end_date=datetime(1929, 12, 1, tzinfo=UTC),
-            surface_embedding=[1.0] * 8,
-            surface_embedding_epoch="all-MiniLM-L6-v2",
-        )
+        base = {
+            "scope_id": "US",
+            "arc_type": "credit_boom_and_bust",
+            "start_date": datetime(1929, 9, 1, tzinfo=UTC),
+            "end_date": datetime(1929, 12, 1, tzinfo=UTC),
+            "surface_embedding": [1.0] * 8,
+            "surface_embedding_epoch": "all-MiniLM-L6-v2",
+        }
         a = _episode(title="A", **base)
         b_fields = dict(base)
         b_fields.update(overrides)

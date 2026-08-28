@@ -7,7 +7,7 @@ data-driven arc discovery.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, Optional, Sequence
 from uuid import UUID
 
 import numpy as np
@@ -16,6 +16,7 @@ from sklearn.cluster import DBSCAN, HDBSCAN
 from narrative_engine.models import Episode
 from narrative_engine.taxonomy.models import (
     ArcTaxonomy,
+    CanonicalArc,
     DiscoveredArc,
     TaxonomyStatus,
     TaxonomyType,
@@ -49,7 +50,7 @@ to identify emergent patterns not captured by canonical taxonomies.
 
         This migrates the hardcoded ArcType enum into the database.
         """
-        from narrative_engine.models import ArcType, ArcPhase
+        from narrative_engine.models import ArcType
 
         # Create taxonomy
         taxonomy = ArcTaxonomy(
@@ -63,7 +64,7 @@ to identify emergent patterns not captured by canonical taxonomies.
         taxonomy = await self.arc_repository.create_taxonomy(taxonomy)
 
         # Create canonical arcs
-        canonical_arcs = [
+        canonical_arcs: list[Dict[str, Any]] = [
             {
                 "slug": ArcType.CREDIT_BOOM_AND_BUST.value,
                 "name": "Credit Boom and Bust",
@@ -124,7 +125,7 @@ to identify emergent patterns not captured by canonical taxonomies.
                 "slug": ArcType.GENERATIONAL_FORGETTING.value,
                 "name": "Generational Forgetting",
                 "description": "Lessons learned are lost as generations turn over",
-                "phases": ["crisis", "memory", " complacency", "forgetting", "repeat"],
+                "phases": ["crisis", "memory", "complacency", "forgetting", "repeat"],
                 "theoretical_sources": ["Strauss-Howe-1997"],
                 "keywords": ["generational", "forgetting", "memory", "cycle"],
             },
@@ -145,15 +146,46 @@ to identify emergent patterns not captured by canonical taxonomies.
                 "theoretical_sources": ["Aristotle", "Shakespeare"],
                 "keywords": ["tragedy", "flaw", "fate", "doom"],
             },
+            {
+                "slug": ArcType.COMEDY.value,
+                "name": "Comedy",
+                "description": "Confusion and conflict resolved through recognition and reunion",
+                "phases": ["disruption", "confusion", "complication", "recognition", "reunion"],
+                "theoretical_sources": ["Aristotle", "Frye-1957"],
+                "keywords": ["comedy", "confusion", "recognition", "reunion"],
+            },
+            {
+                "slug": ArcType.REBIRTH.value,
+                "name": "Rebirth",
+                "description": "Decline or confinement followed by transformation and renewal",
+                "phases": ["decline", "confinement", "crisis", "awakening", "renewal"],
+                "theoretical_sources": ["Booker-2004"],
+                "keywords": ["rebirth", "awakening", "transformation", "renewal"],
+            },
+            {
+                "slug": ArcType.VOYAGE_RETURN.value,
+                "name": "Voyage and Return",
+                "description": "Entry into an unfamiliar world followed by ordeal and return",
+                "phases": ["departure", "arrival", "ordeal", "escape", "return"],
+                "theoretical_sources": ["Booker-2004"],
+                "keywords": ["voyage", "foreign_world", "ordeal", "return"],
+            },
+            {
+                "slug": ArcType.RAGS_TO_RICHES.value,
+                "name": "Rags to Riches",
+                "description": "An overlooked protagonist rises through opportunity and trial",
+                "phases": ["obscurity", "opportunity", "rise", "trial", "attainment"],
+                "theoretical_sources": ["Booker-2004"],
+                "keywords": ["ascent", "opportunity", "trial", "attainment"],
+            },
         ]
 
         for arc_data in canonical_arcs:
-            arc = DiscoveredArc(  # Using DiscoveredArc model but canonical type
-                name=arc_data["name"],
-                description=arc_data["description"],
-                # These would be properly constructed in real implementation
+            arc = CanonicalArc(
+                **arc_data,
+                taxonomy_ids=[taxonomy.id],
             )
-            # In real implementation, would use CanonicalArc
+            await self.arc_repository.create_canonical_arc(arc, taxonomy.id)
 
         # Activate the taxonomy
         await self.arc_repository.update_taxonomy_status(

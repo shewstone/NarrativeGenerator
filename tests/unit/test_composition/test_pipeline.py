@@ -11,20 +11,28 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import uuid4
 
+import pytest
+from sqlalchemy import func, select
+
 from narrative_engine.composition import compose_arc_instances_from_episodes
-from narrative_engine.composition.pipeline import _cluster_within_scope
 from narrative_engine.composition.identity import ArcIdentityResolver
+from narrative_engine.composition.pipeline import (
+    CompositionPipeline,
+    _cluster_within_scope,
+)
 from narrative_engine.models import ArcPhase, ArcType, CycleScale, Episode
+from narrative_engine.storage.orm_models import CycleMembershipORM, CycleORM
+from narrative_engine.storage.repositories import EpisodeRepository
 
 
 def _episode(**overrides) -> Episode:
-    defaults = dict(
-        id=uuid4(),
-        title="Episode",
-        summary="Summary",
-        arc_type=ArcType.CREDIT_BOOM_AND_BUST,
-        scope_id="us_national",
-    )
+    defaults = {
+        "id": uuid4(),
+        "title": "Episode",
+        "summary": "Summary",
+        "arc_type": ArcType.CREDIT_BOOM_AND_BUST,
+        "scope_id": "us_national",
+    }
     defaults.update(overrides)
     return Episode(**defaults)
 
@@ -170,6 +178,56 @@ class TestNoSilentDrops:
 
         assert len(instances) == 1
         assert a.id in instances[0].phases[ArcPhase.PANIC].episode_ids
+
+    def test_unphased_episode_is_retained_for_persistence(self):
+        episode = _episode(
+            start_date=datetime(1907, 10, 1),
+            end_date=datetime(1907, 11, 1),
+            arc_phase=None,
+        )
+
+        instances = compose_arc_instances_from_episodes([episode], arc_type=ArcType.CREDIT_BOOM_AND_BUST)
+
+        assert instances[0].unphased_episode_ids == [episode.id]
+
+
+class TestPersistenceReconciliation:
+    @pytest.mark.asyncio
+    async def test_repeated_composition_reuses_existing_instance(self, db_session):
+        episode = _episode(
+            start_date=datetime(1907, 10, 1),
+            end_date=datetime(1907, 11, 1),
+            arc_phase=ArcPhase.PANIC,
+        )
+        await EpisodeRepository(db_session).create(episode)
+        pipeline = CompositionPipeline(db_session)
+
+        instances = await pipeline.compose_arc_instances(ArcType.CREDIT_BOOM_AND_BUST)
+        first = await pipeline.reconcile_instances(instances, ArcType.CREDIT_BOOM_AND_BUST)
+        second = await pipeline.reconcile_instances(instances, ArcType.CREDIT_BOOM_AND_BUST)
+
+        cycle_count = (await db_session.execute(select(func.count(CycleORM.id)))).scalar_one()
+        membership_count = (await db_session.execute(select(func.count(CycleMembershipORM.id)))).scalar_one()
+        assert cycle_count == 1
+        assert membership_count == 1
+        assert second[0].id == first[0].id
+
+    @pytest.mark.asyncio
+    async def test_unphased_episode_gets_membership(self, db_session):
+        episode = _episode(
+            start_date=datetime(1907, 10, 1),
+            end_date=datetime(1907, 11, 1),
+            arc_phase=None,
+        )
+        await EpisodeRepository(db_session).create(episode)
+        pipeline = CompositionPipeline(db_session)
+
+        instances = await pipeline.compose_arc_instances(ArcType.CREDIT_BOOM_AND_BUST)
+        await pipeline.reconcile_instances(instances, ArcType.CREDIT_BOOM_AND_BUST)
+
+        membership = (await db_session.execute(select(CycleMembershipORM))).scalar_one()
+        assert membership.episode_id == episode.id
+        assert membership.phase_coverage == []
 
 
 class TestClusterWithinScope:

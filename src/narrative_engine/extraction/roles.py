@@ -20,11 +20,24 @@ or the vocabulary only spots roles wearing individual faces (Sec 10.1a).
 
 from enum import Enum
 
-CURRENT_ROLE_VOCAB_VERSION = "role-v0.1.0"
+CURRENT_ROLE_VOCAB_VERSION = "role-v0.2.0"
 
 
 class ActorRole(str, Enum):
     """Controlled vocabulary of structural actor positions."""
+
+    # --- Domain-neutral group dynamics ---
+    INCUMBENT = "incumbent"                          # established holder defending position
+    CHALLENGER = "challenger"                        # actor seeking to displace an incumbent
+    COALITION = "coalition"                          # aligned actors pooling support/capability
+    CONSTITUENCY = "constituency"                    # base whose support grants capacity/legitimacy
+    DISSENTER = "dissenter"                          # insider openly departing from group consensus
+    SUCCESSOR = "successor"                          # recipient of role, authority, or stewardship
+    MEDIATOR = "mediator"                            # bridges opposed actors toward coordination
+    GATEKEEPER = "gatekeeper"                        # controls access to membership/resources/audience
+    BROKER = "broker"                                # connects otherwise separated actors or groups
+    INNOVATOR = "innovator"                          # introduces a practice that changes possibilities
+    CUSTODIAN = "custodian"                          # preserves memory, norms, or capability through change
 
     # --- Political-economy (Sec 3.3 seed set) ---
     RISING_POWER = "rising_power"                    # challenger gaining relative capability

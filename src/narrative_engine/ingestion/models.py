@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-
-from narrative_engine.models import utcnow
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from uuid import UUID, uuid4
+
+from narrative_engine.models import utcnow
 
 
 class SourceFormat(str, Enum):
@@ -117,7 +116,11 @@ class ParsedDocument:
         results = []
 
         def traverse(element: StructuralElement, parent_title: str = ""):
-            full_title = f"{parent_title} - {element.title}" if parent_title and element.title else (element.title or parent_title)
+            full_title = (
+                f"{parent_title} - {element.title}"
+                if parent_title and element.title
+                else (element.title or parent_title)
+            )
             if element.content.strip():
                 results.append((element.element_type, full_title, element.content))
             for child in element.children:

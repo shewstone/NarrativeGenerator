@@ -238,15 +238,9 @@ class EpisodeRepository:
         if not wanted:
             return set()
         result = await self.session.execute(
-            select(EpisodeORM.arc_type, EpisodeORM.extracted_from).where(
-                EpisodeORM.arc_type.is_not(None)
-            )
+            select(EpisodeORM.arc_type, EpisodeORM.extracted_from).where(EpisodeORM.arc_type.is_not(None))
         )
-        return {
-            arc_type
-            for arc_type, extracted_from in result.all()
-            if wanted.intersection(extracted_from or [])
-        }
+        return {arc_type for arc_type, extracted_from in result.all() if wanted.intersection(extracted_from or [])}
 
     def _to_orm(self, episode: Episode) -> EpisodeORM:
         """Convert Pydantic model to ORM.
@@ -268,12 +262,25 @@ class EpisodeRepository:
             location=episode.location,
             setting_description=episode.setting_description,
             scope_id=episode.scope_id,
+            scope_name=episode.scope_name,
+            scope_kind=episode.scope_kind.value if episode.scope_kind else None,
+            parent_scope_name=episode.parent_scope_name,
+            scope_confidence=episode.scope_confidence,
+            scope_evidence=episode.scope_evidence,
+            scope_notes=episode.scope_notes,
             initiating_conditions=episode.initiating_conditions,
             escalation_mechanics=episode.escalation_mechanics,
             tension=episode.tension,
             resolution=episode.resolution,
             consequences=episode.consequences,
             mechanism_tags=episode.mechanism_tags,
+            change_pattern=episode.change_pattern.value if episode.change_pattern else None,
+            pattern_confidence=episode.pattern_confidence,
+            pattern_rationale=episode.pattern_rationale,
+            situation_scale=episode.situation_scale.value if episode.situation_scale else None,
+            domains=[domain.value for domain in episode.domains],
+            configuration=episode.configuration.model_dump(mode="json", exclude_none=True),
+            mechanism_families=[family.value for family in episode.mechanism_families],
             arc_type=episode.arc_type,
             arc_phase=episode.arc_phase,
             phase_confidence=episode.phase_confidence,
@@ -323,9 +330,7 @@ class EpisodeRepository:
         unloaded = sa_inspect(orm).unloaded
         actors = orm.actors if "actors" not in unloaded else []
         source_passages = orm.source_passages if "source_passages" not in unloaded else []
-        parent_cycle_ids = (
-            {c.id for c in orm.cycles} if "cycles" not in unloaded else set()
-        )
+        parent_cycle_ids = {c.id for c in orm.cycles} if "cycles" not in unloaded else set()
 
         return Episode(
             id=orm.id,
@@ -337,6 +342,12 @@ class EpisodeRepository:
             location=orm.location,
             setting_description=orm.setting_description,
             scope_id=orm.scope_id,
+            scope_name=orm.scope_name,
+            scope_kind=orm.scope_kind,
+            parent_scope_name=orm.parent_scope_name,
+            scope_confidence=orm.scope_confidence,
+            scope_evidence=orm.scope_evidence,
+            scope_notes=orm.scope_notes,
             actors=[
                 Actor(
                     id=a.id,
@@ -347,13 +358,22 @@ class EpisodeRepository:
                     attributes=a.attributes,
                 )
                 for a in actors
-            ] if actors else [],
+            ]
+            if actors
+            else [],
             initiating_conditions=orm.initiating_conditions,
             escalation_mechanics=orm.escalation_mechanics,
             tension=orm.tension,
             resolution=orm.resolution,
             consequences=orm.consequences,
             mechanism_tags=orm.mechanism_tags,
+            change_pattern=orm.change_pattern,
+            pattern_confidence=orm.pattern_confidence,
+            pattern_rationale=orm.pattern_rationale,
+            situation_scale=orm.situation_scale,
+            domains=orm.domains,
+            configuration=orm.configuration,
+            mechanism_families=orm.mechanism_families,
             arc_type=orm.arc_type,
             arc_phase=orm.arc_phase,
             phase_confidence=orm.phase_confidence,
@@ -371,7 +391,9 @@ class EpisodeRepository:
                     historiographic_school=sp.historiographic_school,
                 )
                 for sp in source_passages
-            ] if source_passages else [],
+            ]
+            if source_passages
+            else [],
             extracted_from=orm.extracted_from,
             created_at=orm.created_at,
             updated_at=orm.updated_at,
@@ -392,12 +414,25 @@ class EpisodeRepository:
         orm.location = episode.location
         orm.setting_description = episode.setting_description
         orm.scope_id = episode.scope_id
+        orm.scope_name = episode.scope_name
+        orm.scope_kind = episode.scope_kind.value if episode.scope_kind else None
+        orm.parent_scope_name = episode.parent_scope_name
+        orm.scope_confidence = episode.scope_confidence
+        orm.scope_evidence = episode.scope_evidence
+        orm.scope_notes = episode.scope_notes
         orm.initiating_conditions = episode.initiating_conditions
         orm.escalation_mechanics = episode.escalation_mechanics
         orm.tension = episode.tension
         orm.resolution = episode.resolution
         orm.consequences = episode.consequences
         orm.mechanism_tags = episode.mechanism_tags
+        orm.change_pattern = episode.change_pattern.value if episode.change_pattern else None
+        orm.pattern_confidence = episode.pattern_confidence
+        orm.pattern_rationale = episode.pattern_rationale
+        orm.situation_scale = episode.situation_scale.value if episode.situation_scale else None
+        orm.domains = [domain.value for domain in episode.domains]
+        orm.configuration = episode.configuration.model_dump(mode="json", exclude_none=True)
+        orm.mechanism_families = [family.value for family in episode.mechanism_families]
         orm.arc_type = episode.arc_type
         orm.arc_phase = episode.arc_phase
         orm.phase_confidence = episode.phase_confidence
@@ -457,19 +492,14 @@ class CycleRepository:
     ) -> Sequence[Cycle]:
         """Get cycles by scale."""
         result = await self.session.execute(
-            select(CycleORM)
-            .where(CycleORM.scale == scale)
-            .options(selectinload(CycleORM.episodes))
-            .limit(limit)
+            select(CycleORM).where(CycleORM.scale == scale).options(selectinload(CycleORM.episodes)).limit(limit)
         )
         return [self._from_orm(c) for c in result.scalars().all()]
 
     async def get_children(self, cycle_id: UUID) -> Sequence[Cycle]:
         """Get child cycles."""
         result = await self.session.execute(
-            select(CycleORM)
-            .where(CycleORM.parent_cycle_id == cycle_id)
-            .options(selectinload(CycleORM.episodes))
+            select(CycleORM).where(CycleORM.parent_cycle_id == cycle_id).options(selectinload(CycleORM.episodes))
         )
         return [self._from_orm(c) for c in result.scalars().all()]
 
@@ -498,12 +528,8 @@ class CycleRepository:
             start_date=orm.start_date,
             end_date=orm.end_date,
             parent_cycle_id=orm.parent_cycle_id,
-            child_cycle_ids=(
-                {c.id for c in orm.children} if "children" not in unloaded else set()
-            ),
-            episode_ids=(
-                {e.id for e in orm.episodes} if "episodes" not in unloaded else set()
-            ),
+            child_cycle_ids=({c.id for c in orm.children} if "children" not in unloaded else set()),
+            episode_ids=({e.id for e in orm.episodes} if "episodes" not in unloaded else set()),
             dominant_arc_types=orm.dominant_arc_types,
             phase_estimate=orm.phase_estimate,
             framework_source=orm.framework_source,
@@ -530,9 +556,7 @@ class ThesisRepository:
             analog_episode_ids=[str(eid) for eid in thesis.analog_episode_ids],
             analog_similarity_scores=thesis.analog_similarity_scores,
             dominant_continuation=(
-                thesis.dominant_continuation.model_dump(mode="json")
-                if thesis.dominant_continuation
-                else None
+                thesis.dominant_continuation.model_dump(mode="json") if thesis.dominant_continuation else None
             ),
             alternative_continuations=thesis.alternative_continuations,
             confidence=thesis.confidence.value,
@@ -568,6 +592,7 @@ class ThesisRepository:
     async def get_unresolved(self, limit: int = 100) -> Sequence[Thesis]:
         """Get unresolved theses for monitoring."""
         from sqlalchemy import not_
+
         result = await self.session.execute(
             select(ThesisORM).where(not_(ThesisORM.resolved)).order_by(ThesisORM.created_at.desc()).limit(limit)
         )
@@ -621,9 +646,7 @@ class ThesisRepository:
             query_date=orm.query_date,
             analog_episode_ids=orm.analog_episode_ids,
             analog_similarity_scores=orm.analog_similarity_scores,
-            dominant_continuation=(
-                Continuation(**orm.dominant_continuation) if orm.dominant_continuation else None
-            ),
+            dominant_continuation=(Continuation(**orm.dominant_continuation) if orm.dominant_continuation else None),
             alternative_continuations=orm.alternative_continuations,
             confidence=orm.confidence,
             watch_for_indicators=orm.watch_for_indicators,
@@ -675,9 +698,7 @@ class CycleMembershipRepository:
 
     async def get_by_cycle(self, cycle_id: UUID) -> Sequence[CycleMembership]:
         """Get all memberships for a cycle."""
-        result = await self.session.execute(
-            select(CycleMembershipORM).where(CycleMembershipORM.cycle_id == cycle_id)
-        )
+        result = await self.session.execute(select(CycleMembershipORM).where(CycleMembershipORM.cycle_id == cycle_id))
         return [self._from_orm(m) for m in result.scalars().all()]
 
     def _from_orm(self, orm: CycleMembershipORM) -> CycleMembership:
@@ -724,7 +745,9 @@ class ScopeRepository:
 
             registry = get_registry()
 
-        scopes = sorted(registry.all(), key=lambda s: s.parent_scope_id is not None)
+        # Parents must exist before children; a boolean parent-first sort only
+        # handled one level and breaks for faction -> party -> polity trees.
+        scopes = sorted(registry.all(), key=lambda scope: len(registry.lineage(scope.id)))
         for scope in scopes:
             existing = await self.session.get(ScopeORM, scope.id)
             if existing:
@@ -799,9 +822,7 @@ class SourceDocumentRepository:
         )
         return (result.scalar() or 0) > 0
 
-    async def get_by_hash_and_filename(
-        self, content_hash: str, filename: str
-    ) -> Optional[SourceDocument]:
+    async def get_by_hash_and_filename(self, content_hash: str, filename: str) -> Optional[SourceDocument]:
         result = await self.session.execute(
             select(SourceDocumentORM)
             .where(
@@ -889,9 +910,7 @@ class SourceDocumentRepository:
 
     async def list_all(self, limit: int = 200) -> Sequence[SourceDocument]:
         result = await self.session.execute(
-            select(SourceDocumentORM)
-            .order_by(SourceDocumentORM.created_at.desc())
-            .limit(limit)
+            select(SourceDocumentORM).order_by(SourceDocumentORM.created_at.desc()).limit(limit)
         )
         return [self._from_orm(d) for d in result.scalars().all()]
 

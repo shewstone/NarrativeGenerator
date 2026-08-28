@@ -1,13 +1,17 @@
 """Scope registry and resolver tests (T5, docs/tickets/T5-scope-registry.md)."""
 
 from datetime import datetime, timedelta
-from uuid import uuid4
 
 import pytest
 
 from narrative_engine.composition.pipeline import compose_arc_instances_from_episodes
-from narrative_engine.models import Actor, ArcPhase, ArcType, Episode
-from narrative_engine.scopes import get_registry, resolve_scope, scope_registry_version
+from narrative_engine.models import Actor, ArcPhase, ArcType, Episode, Scope
+from narrative_engine.scopes import (
+    ScopeRegistry,
+    get_registry,
+    resolve_scope,
+    scope_registry_version,
+)
 from narrative_engine.storage.repositories import ScopeRepository
 
 
@@ -24,6 +28,13 @@ class TestResolver:
         assert resolve_scope("wilhelmine germany") == "germany"
         assert resolve_scope("Austria-Hungary") == "austria_hungary"
 
+    def test_party_resolves_within_parent_polity(self):
+        assert resolve_scope("CCP") == "chinese_communist_party"
+        assert [scope.id for scope in get_registry().lineage("CCP")][:2] == [
+            "chinese_communist_party",
+            "china",
+        ]
+
     def test_unknown_returns_none_never_guesses(self):
         # No fuzzy matching: a wrong scope silently poisons the composition
         # partition; an unresolved one falls to the visible singleton path.
@@ -39,6 +50,51 @@ class TestResolver:
         # ScopeRegistry.load() raises on collision; loading at all is the test.
         registry = get_registry()
         assert len(registry.all()) >= 20
+
+    def test_nested_faction_party_polity_lineage(self):
+        registry = ScopeRegistry(
+            version="test-v1",
+            scopes=[
+                Scope(id="us", kind="polity", name="United States"),
+                Scope(
+                    id="example_party",
+                    kind="party",
+                    name="Example Party",
+                    parent_scope_id="us",
+                ),
+                Scope(
+                    id="reform_faction",
+                    kind="faction",
+                    name="Reform Faction",
+                    parent_scope_id="example_party",
+                ),
+            ],
+        )
+
+        assert [scope.id for scope in registry.lineage("Reform Faction")] == [
+            "reform_faction",
+            "example_party",
+            "us",
+        ]
+        assert registry.is_within("Reform Faction", "United States")
+        assert {scope.id for scope in registry.descendants("us")} == {
+            "example_party",
+            "reform_faction",
+        }
+
+    def test_invalid_scope_hierarchy_is_rejected(self):
+        with pytest.raises(ValueError, match="unknown parent"):
+            ScopeRegistry(
+                version="test-v1",
+                scopes=[
+                    Scope(
+                        id="orphan",
+                        kind="faction",
+                        name="Orphan Faction",
+                        parent_scope_id="missing",
+                    )
+                ],
+            )
 
 
 class TestCompositionPartitionNormalization:
@@ -60,15 +116,11 @@ class TestCompositionPartitionNormalization:
         boom = self._episode("US", "credit boom", datetime(1927, 1, 1))
         panic = self._episode("United States", "panic", datetime(1929, 10, 1))
 
-        instances = compose_arc_instances_from_episodes(
-            [boom, panic], ArcType.CREDIT_BOOM_AND_BUST
-        )
+        instances = compose_arc_instances_from_episodes([boom, panic], ArcType.CREDIT_BOOM_AND_BUST)
 
         assert len(instances) == 1
         merged = instances[0]
-        covered_episode_ids = {
-            eid for cov in merged.phases.values() for eid in cov.episode_ids
-        }
+        covered_episode_ids = {eid for cov in merged.phases.values() for eid in cov.episode_ids}
         assert covered_episode_ids == {boom.id, panic.id}
 
     def test_unresolved_labels_do_not_merge_with_each_other(self):
@@ -76,11 +128,22 @@ class TestCompositionPartitionNormalization:
         a = self._episode("Atlantis", "credit boom", datetime(1927, 1, 1))
         b = self._episode("Mu", "panic", datetime(1929, 10, 1))
 
-        instances = compose_arc_instances_from_episodes(
-            [a, b], ArcType.CREDIT_BOOM_AND_BUST
-        )
+        instances = compose_arc_instances_from_episodes([a, b], ArcType.CREDIT_BOOM_AND_BUST)
 
         assert len(instances) == 2
+
+    def test_new_subgroup_names_form_their_own_partition(self):
+        a = self._episode("", "credit boom", datetime(1927, 1, 1))
+        b = self._episode("", "panic", datetime(1929, 10, 1))
+        for episode in (a, b):
+            episode.scope_id = None
+            episode.scope_name = "Reform Faction"
+            episode.scope_confidence = 0.9
+
+        instances = compose_arc_instances_from_episodes([a, b], ArcType.CREDIT_BOOM_AND_BUST)
+
+        assert len(instances) == 1
+        assert instances[0].scope_id == "Reform Faction"
 
 
 class TestScopeRepositorySync:

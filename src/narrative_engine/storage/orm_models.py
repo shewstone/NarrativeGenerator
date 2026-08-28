@@ -77,9 +77,7 @@ class CycleMembershipORM(Base):
     # pending | approved | rejected | auto (has a human ratified it)
     review_status: Mapped[str] = mapped_column(String(50), default="auto")
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow, nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     __table_args__ = (
         Index("ix_cycle_memberships_episode", "episode_id"),
@@ -118,13 +116,9 @@ class EpisodeLinkORM(Base):
     review_status: Mapped[str] = mapped_column(String(50), default="pending")
     reviewed_by: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow, nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
-    __table_args__ = (
-        UniqueConstraint("source_episode_id", "target_episode_id", "edge_kind", name="uq_episode_link"),
-    )
+    __table_args__ = (UniqueConstraint("source_episode_id", "target_episode_id", "edge_kind", name="uq_episode_link"),)
 
     def __repr__(self) -> str:
         return f"<EpisodeLinkORM(edge_kind={self.edge_kind}, {self.source_episode_id}->{self.target_episode_id})>"
@@ -150,15 +144,11 @@ class SourceDocumentORM(Base):
     episodes_created: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     extraction_ran: Mapped[bool] = mapped_column(default=False, nullable=False)
     claim_token: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
-    lease_expires_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    lease_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     duplicate_of: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("source_documents.id", ondelete="SET NULL"), nullable=True
     )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow, nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
     )
@@ -283,6 +273,12 @@ class EpisodeORM(Base):
     # Hard filter for composition identity resolution -- episodes in different
     # scopes are never compared (design doc Sec 6.2 stage 6).
     scope_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    scope_name: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    scope_kind: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    parent_scope_name: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    scope_confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    scope_evidence: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    scope_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Narrative structure
     initiating_conditions: Mapped[list] = mapped_column(JSON, default=list)
@@ -295,6 +291,16 @@ class EpisodeORM(Base):
     # during classification alongside arc_type/arc_phase.
     mechanism_tags: Mapped[list] = mapped_column(JSON, default=list)
 
+    # Scale-neutral situation ontology. Strings/JSON are intentional: this
+    # vocabulary can evolve without PostgreSQL enum migrations.
+    change_pattern: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
+    pattern_confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    pattern_rationale: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    situation_scale: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    domains: Mapped[list] = mapped_column(JSON, default=list)
+    configuration: Mapped[dict] = mapped_column(JSON, default=dict)
+    mechanism_families: Mapped[list] = mapped_column(JSON, default=list)
+
     # Arc classification
     arc_type: Mapped[Optional[ArcType]] = mapped_column(Enum(ArcType), nullable=True)
     arc_phase: Mapped[Optional[ArcPhase]] = mapped_column(Enum(ArcPhase), nullable=True)
@@ -305,9 +311,7 @@ class EpisodeORM(Base):
     # arc assignment and are excluded from the arc-conditioned analog base.
     # Plain string (not a PG enum) so vocabulary changes don't need a type
     # migration; values come from models.ClassificationState.
-    classification_state: Mapped[str] = mapped_column(
-        String(20), default="classified", nullable=False
-    )
+    classification_state: Mapped[str] = mapped_column(String(20), default="classified", nullable=False)
 
     # Metadata
     created_at: Mapped[datetime] = mapped_column(
@@ -371,6 +375,9 @@ class EpisodeORM(Base):
         Index("ix_episodes_arc_phase", "arc_phase"),
         Index("ix_episodes_start_date", "start_date"),
         Index("ix_episodes_scope_id", "scope_id"),
+        Index("ix_episodes_scope_name", "scope_name"),
+        Index("ix_episodes_change_pattern", "change_pattern"),
+        Index("ix_episodes_situation_scale", "situation_scale"),
         Index("ix_episodes_classification_state", "classification_state"),
         Index(
             "ix_episodes_structural_embedding",

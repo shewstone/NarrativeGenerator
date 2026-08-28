@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from typing import List, Optional
 
 import structlog
@@ -33,14 +34,19 @@ class EmbeddingGenerator:
             self._model = SentenceTransformer(self.model_name)
             self.logger.info(
                 "Model loaded",
-                embedding_dim=self._model.get_sentence_embedding_dimension(),
+                embedding_dim=self.embedding_dim,
             )
         return self._model
 
     @property
     def embedding_dim(self) -> int:
         """Get the dimensionality of embeddings."""
-        return self.model.get_sentence_embedding_dimension()
+        model = self.model
+        get_dimension = getattr(model, "get_embedding_dimension", None)
+        dimension = get_dimension() if get_dimension is not None else model.get_sentence_embedding_dimension()
+        if dimension is None:
+            raise RuntimeError(f"Embedding model {self.model_name!r} did not report a dimension")
+        return int(dimension)
 
     def generate(self, text: str) -> List[float]:
         """Generate embedding for a single text."""
@@ -54,9 +60,11 @@ class EmbeddingGenerator:
 
     def render_structural_template(self, episode: Episode) -> str:
         """Deterministically render the episode's abstract narrative shape
-        (design doc Sec 3.3): arc type, phase, actor roles (not names),
-        mechanism tags, and the sequence of conditions/mechanics/tension --
-        never raw title/summary text, actor names, location, or dates.
+        (design doc Sec 3.3): scale-neutral pattern/configuration, actor roles
+        (not names), mechanism families, and the sequence of
+        conditions/mechanics/tension -- never raw title/summary text, actor
+        names, focal-scope names, location, or dates. Legacy arc fields remain
+        as a secondary compatibility signal.
 
         This is what makes the structural embedding place/date-blind (so
         Athens-Sparta can embed near Wilhelmine Germany-Britain): title and
@@ -79,8 +87,25 @@ class EmbeddingGenerator:
         """
         lines: List[str] = []
 
+        if episode.change_pattern:
+            lines.append(f"Change pattern: {episode.change_pattern.value}")
+
+        if episode.situation_scale:
+            lines.append(f"Scale: {episode.situation_scale.value}")
+
+        if episode.domains:
+            lines.append(f"Domains: {', '.join(domain.value for domain in episode.domains)}")
+
+        configuration = episode.configuration.model_dump(exclude_none=True)
+        if configuration:
+            serialized = ", ".join(f"{dimension}={value:+.2f}" for dimension, value in configuration.items())
+            lines.append(f"Configuration: {serialized}")
+
+        if episode.mechanism_families:
+            lines.append("Mechanism families: " + ", ".join(family.value for family in episode.mechanism_families))
+
         if episode.arc_type:
-            lines.append(f"Arc: {episode.arc_type.value}")
+            lines.append(f"Legacy arc: {episode.arc_type.value}")
 
         if episode.arc_phase:
             lines.append(f"Phase: {episode.arc_phase.value}")
@@ -104,9 +129,7 @@ class EmbeddingGenerator:
         if episode.mechanism_tags:
             # Sec 3.3 template's MECHANISMS line: controlled-vocabulary
             # structural drivers, serialized in tag order.
-            lines.append(
-                f"Mechanisms: {', '.join(tag.value for tag in episode.mechanism_tags)}"
-            )
+            lines.append(f"Mechanisms: {', '.join(tag.value for tag in episode.mechanism_tags)}")
 
         scrub = self._identity_scrubber(episode)
 
@@ -157,6 +180,10 @@ class EmbeddingGenerator:
                 place_names.extend([scope.name, *scope.aliases])
         for place in place_names:
             replacements.append((place, "<PLACE>"))
+        if episode.scope_name:
+            replacements.append((episode.scope_name, "<FOCAL_SCOPE>"))
+        if episode.parent_scope_name:
+            replacements.append((episode.parent_scope_name, "<PARENT_SCOPE>"))
 
         # Longest-first so "United States of America" wins over "America".
         # Lookaround word anchors, not \b: aliases like "U.S." end in
@@ -169,20 +196,13 @@ class EmbeddingGenerator:
             # States" and "Austria-Hungary" both normalize to bare <PLACE> --
             # article variance is identity residue too.
             article = r"(?:the\s+)?" if target == "<PLACE>" else ""
-            return re.compile(
-                rf"(?<!\w){article}{re.escape(source)}(?!\w)", re.IGNORECASE
-            )
+            return re.compile(rf"(?<!\w){article}{re.escape(source)}(?!\w)", re.IGNORECASE)
 
-        compiled = [
-            (_compile(source, target), target)
-            for source, target in replacements
-            if source
-        ]
+        compiled = [(_compile(source, target), target) for source, target in replacements if source]
 
         year_pattern = re.compile(r"\b(1[0-9]{3}|20[0-9]{2})s?\b")
         month_pattern = re.compile(
-            r"\b(January|February|March|April|May|June|July|August|"
-            r"September|October|November|December)\b",
+            r"\b(January|February|March|April|May|June|July|August|" r"September|October|November|December)\b",
             re.IGNORECASE,
         )
 
@@ -236,10 +256,15 @@ class EmbeddingGenerator:
         """Compute cosine similarity between two embeddings."""
         import numpy as np
 
-        v1 = np.array(embedding1)
-        v2 = np.array(embedding2)
+        v1 = np.asarray(embedding1, dtype=np.float32)
+        v2 = np.asarray(embedding2, dtype=np.float32)
+        if v1.shape != v2.shape:
+            raise ValueError(f"Embedding dimensions differ: {v1.shape!r} != {v2.shape!r}")
+        denominator = float(np.linalg.norm(v1) * np.linalg.norm(v2))
+        if denominator == 0.0:
+            return 0.0
 
-        return float(np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2)))
+        return float(np.dot(v1, v2) / denominator)
 
     def compute_similarities(
         self,
@@ -247,14 +272,36 @@ class EmbeddingGenerator:
         candidate_embeddings: List[List[float]],
     ) -> List[float]:
         """Compute similarities between query and multiple candidates."""
-        return [self.similarity(query_embedding, cand) for cand in candidate_embeddings]
+        if not candidate_embeddings:
+            return []
+
+        import numpy as np
+
+        query = np.asarray(query_embedding, dtype=np.float32)
+        candidates = np.asarray(candidate_embeddings, dtype=np.float32)
+        if candidates.ndim != 2 or candidates.shape[1:] != query.shape:
+            raise ValueError("Candidate embeddings must all match the query embedding dimension")
+
+        query_norm = float(np.linalg.norm(query))
+        candidate_norms = np.linalg.norm(candidates, axis=1)
+        denominators = candidate_norms * query_norm
+        similarities = np.divide(
+            candidates @ query,
+            denominators,
+            out=np.zeros(len(candidates), dtype=np.float32),
+            where=denominators != 0,
+        )
+        return similarities.tolist()
 
 
 class EmbeddingCache:
-    """Simple in-memory cache for embeddings (production: use Redis)."""
+    """Bounded in-memory LRU cache for embeddings (production: use Redis)."""
 
-    def __init__(self) -> None:
-        self._cache: dict = {}
+    def __init__(self, max_size: int = 1024) -> None:
+        if max_size <= 0:
+            raise ValueError("max_size must be positive")
+        self.max_size = max_size
+        self._cache: OrderedDict[str, List[float]] = OrderedDict()
         self._hits = 0
         self._misses = 0
 
@@ -262,6 +309,7 @@ class EmbeddingCache:
         """Get embedding from cache."""
         if key in self._cache:
             self._hits += 1
+            self._cache.move_to_end(key)
             return self._cache[key]
         self._misses += 1
         return None
@@ -269,6 +317,9 @@ class EmbeddingCache:
     def set(self, key: str, embedding: List[float]) -> None:
         """Store embedding in cache."""
         self._cache[key] = embedding
+        self._cache.move_to_end(key)
+        if len(self._cache) > self.max_size:
+            self._cache.popitem(last=False)
 
     def get_stats(self) -> dict:
         """Get cache statistics."""

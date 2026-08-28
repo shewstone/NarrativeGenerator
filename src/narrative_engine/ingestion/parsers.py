@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import re
 from abc import ABC, abstractmethod
+from importlib.util import find_spec
 from pathlib import Path
 from typing import Optional
 
@@ -114,10 +115,21 @@ class TxtParser(BaseParser):
         chapters = list(re.finditer(chapter_pattern, content))
 
         if chapters:
+            # Preserve any foreword/preamble before the first detected
+            # chapter; chunking consumes structural_elements rather than the
+            # top-level content field, so dropping it here loses source text.
+            preamble = content[: chapters[0].start()].strip()
+            if preamble:
+                elements.append(
+                    StructuralElement(
+                        element_type="document",
+                        level=0,
+                        content=preamble,
+                    )
+                )
+
             # Split content by chapters
-            last_end = 0
             for i, match in enumerate(chapters):
-                chapter_num = match.group(1)
                 start = match.start()
                 end = chapters[i + 1].start() if i + 1 < len(chapters) else len(content)
 
@@ -134,7 +146,6 @@ class TxtParser(BaseParser):
                         content=chapter_content,
                     )
                 )
-                last_end = end
         else:
             # No chapters found, treat as single element
             elements.append(
@@ -200,15 +211,28 @@ class MarkdownParser(BaseParser):
 
         current_element = None
         element_content = []
+        preamble_content = []
+        saw_header = False
 
-        for i, line in enumerate(lines):
+        for line in lines:
             match = re.match(header_pattern, line)
             if match:
                 # Save previous element
                 if current_element:
                     current_element.content = "\n".join(element_content)
                     elements.append(current_element)
+                elif not saw_header:
+                    preamble = "\n".join(preamble_content).strip()
+                    if preamble:
+                        elements.append(
+                            StructuralElement(
+                                element_type="document",
+                                level=0,
+                                content=preamble,
+                            )
+                        )
 
+                saw_header = True
                 level = len(match.group(1)) - 1  # 0-indexed
                 title = match.group(2).strip()
                 current_element = StructuralElement(
@@ -220,6 +244,8 @@ class MarkdownParser(BaseParser):
             else:
                 if current_element:
                     element_content.append(line)
+                else:
+                    preamble_content.append(line)
 
         # Save last element
         if current_element:
@@ -227,7 +253,7 @@ class MarkdownParser(BaseParser):
             elements.append(current_element)
 
         # If no headers found, treat as single element
-        if not elements:
+        if not saw_header:
             elements.append(
                 StructuralElement(
                     element_type="document",
@@ -262,12 +288,7 @@ class PdfParser(BaseParser):
     def _check_dependencies(self) -> bool:
         """Check if PDF parsing libraries are available."""
         if self._has_pdf_lib is None:
-            try:
-                import pdfplumber
-
-                self._has_pdf_lib = True
-            except ImportError:
-                self._has_pdf_lib = False
+            self._has_pdf_lib = find_spec("pdfplumber") is not None
         return self._has_pdf_lib
 
     def can_parse(self, file_path: Path) -> bool:
@@ -278,10 +299,7 @@ class PdfParser(BaseParser):
         logger.info("parsing_pdf_file", file_path=str(file_path))
 
         if not self._check_dependencies():
-            raise ImportError(
-                "PDF parsing requires pdfplumber. Install with: "
-                "pip install pdfplumber"
-            )
+            raise ImportError("PDF parsing requires pdfplumber. Install with: " "pip install pdfplumber")
 
         import pdfplumber
 
@@ -291,9 +309,8 @@ class PdfParser(BaseParser):
 
         with pdfplumber.open(file_path) as pdf:
             page_count = len(pdf.pages)
-            current_chapter = None
 
-            for i, page in enumerate(pdf.pages):
+            for page in pdf.pages:
                 text = page.extract_text()
                 if text:
                     full_text.append(text)
@@ -331,6 +348,15 @@ class PdfParser(BaseParser):
         matches = list(re.finditer(chapter_pattern, content))
 
         if len(matches) > 2:  # Only if we find multiple chapters
+            preamble = content[: matches[0].start()].strip()
+            if preamble:
+                elements.append(
+                    StructuralElement(
+                        element_type="document",
+                        level=0,
+                        content=preamble,
+                    )
+                )
             for i, match in enumerate(matches):
                 start = match.start()
                 end = matches[i + 1].start() if i + 1 < len(matches) else len(content)
@@ -367,12 +393,7 @@ class EpubParser(BaseParser):
     def _check_dependencies(self) -> bool:
         """Check if EPUB parsing libraries are available."""
         if self._has_epub_lib is None:
-            try:
-                import ebooklib
-
-                self._has_epub_lib = True
-            except ImportError:
-                self._has_epub_lib = False
+            self._has_epub_lib = find_spec("ebooklib") is not None
         return self._has_epub_lib
 
     def can_parse(self, file_path: Path) -> bool:
@@ -383,10 +404,7 @@ class EpubParser(BaseParser):
         logger.info("parsing_epub_file", file_path=str(file_path))
 
         if not self._check_dependencies():
-            raise ImportError(
-                "EPUB parsing requires ebooklib. Install with: "
-                "pip install ebooklib beautifulsoup4"
-            )
+            raise ImportError("EPUB parsing requires ebooklib. Install with: " "pip install ebooklib beautifulsoup4")
 
         import ebooklib
         from ebooklib import epub
@@ -470,11 +488,8 @@ class HtmlParser(BaseParser):
 
         try:
             from bs4 import BeautifulSoup
-        except ImportError:
-            raise ImportError(
-                "HTML parsing requires beautifulsoup4. Install with: "
-                "pip install beautifulsoup4"
-            )
+        except ImportError as exc:
+            raise ImportError("HTML parsing requires beautifulsoup4. Install with: pip install beautifulsoup4") from exc
 
         content = file_path.read_text(encoding="utf-8", errors="replace")
         soup = BeautifulSoup(content, "html.parser")
@@ -534,18 +549,21 @@ class OcrParser(BaseParser):
     def __init__(self):
         super().__init__(SourceFormat.PDF)
         self._has_ocr = None
+        self.page_batch_size = 4
 
     def _check_dependencies(self) -> bool:
         """Check if OCR libraries are available."""
         if self._has_ocr is None:
+            if any(find_spec(package) is None for package in ("pytesseract", "PIL", "pdf2image")):
+                self._has_ocr = False
+                return False
             try:
                 import pytesseract
-                from PIL import Image
 
                 # Verify tesseract is installed
                 pytesseract.get_tesseract_version()
                 self._has_ocr = True
-            except (ImportError, Exception):
+            except Exception:
                 self._has_ocr = False
         return self._has_ocr
 
@@ -579,15 +597,33 @@ class OcrParser(BaseParser):
             )
 
         import pytesseract
-        from pdf2image import convert_from_path
+        from pdf2image import convert_from_path, pdfinfo_from_path
 
-        images = convert_from_path(file_path, dpi=300)
+        page_count = int(pdfinfo_from_path(file_path).get("Pages", 0))
+        if page_count <= 0:
+            raise ValueError(f"Could not determine PDF page count for {file_path}")
         full_text = []
 
-        for i, image in enumerate(images):
-            logger.debug("ocr_page", file_path=str(file_path), page=i + 1)
-            text = pytesseract.image_to_string(image)
-            full_text.append(text)
+        # Rendering a whole scanned book at 300 DPI can consume gigabytes.
+        # Bound live image memory to a small page batch and close every PIL
+        # image promptly after OCR.
+        for first_page in range(1, page_count + 1, self.page_batch_size):
+            last_page = min(page_count, first_page + self.page_batch_size - 1)
+            images = convert_from_path(
+                file_path,
+                dpi=300,
+                first_page=first_page,
+                last_page=last_page,
+                thread_count=1,
+            )
+            try:
+                for offset, image in enumerate(images):
+                    page_number = first_page + offset
+                    logger.debug("ocr_page", file_path=str(file_path), page=page_number)
+                    full_text.append(pytesseract.image_to_string(image))
+            finally:
+                for image in images:
+                    image.close()
 
         content = "\n\n".join(full_text)
 
@@ -596,7 +632,7 @@ class OcrParser(BaseParser):
             source_format=SourceFormat.PDF,
             file_path=file_path,
             file_hash=self._compute_file_hash(file_path),
-            total_pages=len(images),
+            total_pages=page_count,
             word_count=len(content.split()),
             document_type=self._detect_document_type(file_path, {}),
             requires_ocr=True,
@@ -619,10 +655,12 @@ class OcrParser(BaseParser):
 PARSERS: list = [
     TxtParser(),
     MarkdownParser(),
+    # Probe for image-only PDFs before the generic PDF parser, whose
+    # extension-only can_parse() would otherwise make OCR unreachable.
+    OcrParser(),
     PdfParser(),
     EpubParser(),
     HtmlParser(),
-    OcrParser(),  # Last, as it's a fallback for PDFs
 ]
 
 

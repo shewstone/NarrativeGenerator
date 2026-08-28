@@ -34,17 +34,17 @@ from narrative_engine.models import (
     ThesisConfidence,
     ThesisMode,
 )
-from narrative_engine.retrieval.embeddings import EmbeddingGenerator
 from narrative_engine.retrieval.analog_retrieval import RetrievedAnalog
+from narrative_engine.retrieval.embeddings import EmbeddingGenerator
 from narrative_engine.thesis.generator import ThesisGenerator
 
 
 def make_episode(**overrides) -> Episode:
-    defaults = dict(
-        title="Test Episode",
-        summary="A test episode",
-        arc_type=ArcType.CREDIT_BOOM_AND_BUST,
-    )
+    defaults = {
+        "title": "Test Episode",
+        "summary": "A test episode",
+        "arc_type": ArcType.CREDIT_BOOM_AND_BUST,
+    }
     defaults.update(overrides)
     return Episode(**defaults)
 
@@ -127,12 +127,12 @@ class TestStructuralRenderMasking:
     def test_query_and_corpus_render_symmetrically(self):
         """A resolved corpus episode and an unresolved query episode with the
         same situation must render identically (query/corpus symmetry)."""
-        common = dict(
-            arc_type=ArcType.CREDIT_BOOM_AND_BUST,
-            arc_phase=ArcPhase.DISTRESS,
-            initiating_conditions=["credit expansion"],
-            tension="leverage vs liquidity",
-        )
+        common = {
+            "arc_type": ArcType.CREDIT_BOOM_AND_BUST,
+            "arc_phase": ArcPhase.DISTRESS,
+            "initiating_conditions": ["credit expansion"],
+            "tension": "leverage vs liquidity",
+        }
         resolved = make_episode(resolution="it crashed", consequences=["ruin"], **common)
         unresolved = make_episode(resolution=None, consequences=[], **common)
         generator = EmbeddingGenerator()

@@ -15,6 +15,7 @@ from narrative_engine.api.app import create_app, get_session
 from narrative_engine.models import (
     ArcPhase,
     ArcType,
+    ChangePattern,
     Cycle,
     CycleMembership,
     CycleScale,
@@ -22,8 +23,12 @@ from narrative_engine.models import (
     Episode,
     EpisodeLink,
     LinkStatus,
+    MechanismFamily,
     MechanismTag,
     ReviewStatus,
+    ScopeKind,
+    SituationDomain,
+    SituationScale,
     SourceDocument,
     SourceDocumentStatus,
 )
@@ -144,9 +149,7 @@ class TestRetryEndpoint:
             extraction_ran=True,
         )
         await repo.create(done)
-        duplicate = SourceDocument(
-            filename="dup.txt", content_hash="e" * 64, status="duplicate"
-        )
+        duplicate = SourceDocument(filename="dup.txt", content_hash="e" * 64, status="duplicate")
         await repo.create(duplicate)
 
         for doc in (done, duplicate):
@@ -205,6 +208,15 @@ class TestArcSpaceEndpoint:
             arc_phase=ArcPhase.BOOM,
             phase_confidence=0.91,
             mechanism_tags=[MechanismTag.CREDIT_EXPANSION, MechanismTag.DEBT_OVERHANG],
+            change_pattern=ChangePattern.EMERGENCE_AND_GATHERING,
+            pattern_confidence=0.88,
+            situation_scale=SituationScale.GROUP,
+            domains=[SituationDomain.ORGANIZATIONAL, SituationDomain.POLITICAL],
+            mechanism_families=[MechanismFamily.COOPERATION_ALIGNMENT],
+            scope_name="Example movement",
+            scope_kind=ScopeKind.MOVEMENT,
+            parent_scope_name="United States",
+            scope_confidence=0.9,
             start_date=datetime(1906, 1, 1, tzinfo=UTC),
         )
         second = Episode(
@@ -214,6 +226,15 @@ class TestArcSpaceEndpoint:
             arc_phase=ArcPhase.PANIC,
             phase_confidence=0.94,
             mechanism_tags=[MechanismTag.CREDIT_EXPANSION, MechanismTag.FISCAL_DISTRESS],
+            change_pattern=ChangePattern.EXPANSION_AND_CONSOLIDATION,
+            pattern_confidence=0.9,
+            situation_scale=SituationScale.GROUP,
+            domains=[SituationDomain.ORGANIZATIONAL, SituationDomain.POLITICAL],
+            mechanism_families=[MechanismFamily.COOPERATION_ALIGNMENT],
+            scope_name="Example movement",
+            scope_kind=ScopeKind.MOVEMENT,
+            parent_scope_name="United States",
+            scope_confidence=0.9,
             start_date=datetime(1907, 10, 1, tzinfo=UTC),
         )
         await repo.create(first)
@@ -275,7 +296,21 @@ class TestArcSpaceEndpoint:
             "Credit expansion",
             "Banking panic",
         }
-        assert all(set(node) >= {"x", "y", "z", "mechanisms", "phase"} for node in body["nodes"])
+        assert all(
+            set(node)
+            >= {
+                "x",
+                "y",
+                "z",
+                "mechanisms",
+                "phase",
+                "change_pattern",
+                "configuration",
+                "scope_path",
+            }
+            for node in body["nodes"]
+        )
+        assert all(node["scope_path"] == ["United States", "Example movement"] for node in body["nodes"])
 
         knn = next(edge for edge in body["edges"] if edge["kind"] == "structural_neighbor")
         assert knn["structural_similarity"] > 0.9
@@ -285,10 +320,11 @@ class TestArcSpaceEndpoint:
         trajectory = next(edge for edge in body["edges"] if edge["kind"] == "arc_sequence")
         assert trajectory["arc_name"] == cycle.name
         assert trajectory["review_status"] == "pending"
-        assert not any(
-            edge.get("arc_name") == rejected_cycle.name for edge in body["edges"]
-        )
+        assert not any(edge.get("arc_name") == rejected_cycle.name for edge in body["edges"])
         assert not any(edge["kind"] == "same_event_as" for edge in body["edges"])
+        scope_trajectory = next(edge for edge in body["edges"] if edge["kind"] == "scope_sequence")
+        assert scope_trajectory["source_pattern"] == "emergence_and_gathering"
+        assert scope_trajectory["target_pattern"] == "expansion_and_consolidation"
 
 
 class TestReviewFlow:
@@ -309,9 +345,7 @@ class TestReviewFlow:
         queue = (await client.get("/api/review-queue")).json()
         assert len(queue["memberships"]) == 1
 
-        response = await client.post(
-            f"/api/review/membership/{membership.id}", json={"decision": "approved"}
-        )
+        response = await client.post(f"/api/review/membership/{membership.id}", json={"decision": "approved"})
         assert response.status_code == 200
         assert response.json()["review_status"] == "approved"
 

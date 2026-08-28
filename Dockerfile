@@ -1,47 +1,50 @@
 # Multi-stage build for narrative-engine
 FROM python:3.12-slim AS builder
 
-# Install build dependencies
+COPY --from=ghcr.io/astral-sh/uv:0.12.7 /uv /uvx /bin/
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
 WORKDIR /app
-COPY pyproject.toml README.md .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -e ".[dev,llm,web]"
+COPY pyproject.toml uv.lock README.md ./
+# Install the locked server environment. Linux resolves torch from the
+# CPU-only index, avoiding the otherwise-unused CUDA runtime.
+RUN uv sync --frozen --no-install-project --extra llm --extra web
+COPY src/ ./src/
+RUN uv sync --frozen --no-editable --extra llm --extra web
 
-# Runtime stage
-FROM python:3.12-slim AS runtime
+# Tests need a larger environment, but those tools do not belong in the
+# long-running server image.
+FROM builder AS test-builder
+RUN uv sync --frozen --no-editable --extra dev --extra llm --extra web
 
-# Install runtime dependencies
+FROM python:3.12-slim AS runtime-base
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
 RUN useradd -m -u 1000 appuser
-
-# Copy Python packages from builder
-COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
-
-# Set working directory
 WORKDIR /app
 ENV PYTHONPATH=/app/src
+ENV PATH=/app/.venv/bin:$PATH
 
-# Copy source code
 COPY --chown=appuser:appuser src/ ./src/
-COPY --chown=appuser:appuser tests/ ./tests/
-COPY --chown=appuser:appuser pyproject.toml .
-COPY --chown=appuser:appuser alembic.ini .
+COPY --chown=appuser:appuser pyproject.toml ./
+COPY --chown=appuser:appuser alembic.ini ./
 COPY --chown=appuser:appuser alembic/ ./alembic/
 
-# Make /app writable for coverage/pytest artifacts, then switch to non-root user
+FROM runtime-base AS runtime
+COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
+USER appuser
+CMD ["uvicorn", "narrative_engine.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+
+FROM runtime-base AS test
+COPY --from=test-builder --chown=appuser:appuser /app/.venv /app/.venv
+COPY --chown=appuser:appuser tests/ ./tests/
 RUN chown appuser:appuser /app
 USER appuser
-
-# Default command
 CMD ["python", "-m", "pytest", "-v", "--tb=short"]

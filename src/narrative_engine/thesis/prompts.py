@@ -7,8 +7,11 @@ Query: {query}
 Current Situation:
 - Title: {episode_title}
 - Summary: {episode_summary}
-- Arc Type: {arc_type}
-- Current Phase: {arc_phase}
+- Change Pattern: {change_pattern}
+- Scale: {situation_scale}
+- Domains: {domains}
+- Legacy Arc (optional): {arc_type}
+- Legacy Phase (optional): {arc_phase}
 
 Historical Analogs (ranked by relevance):
 {analogs}
@@ -121,7 +124,7 @@ Write a 2-3 paragraph narrative synthesis that:
 3. Acknowledges the key uncertainties and alternative paths
 4. Uses specific examples from the analogs
 
-Tone: Analytical but accessible. Like a good financial journalist or historian explaining the pattern.
+Tone: Analytical but accessible. Explain the pattern without privileging any political, financial, or civilizational frame.
 
 Output:
 {{
@@ -139,8 +142,10 @@ def format_analogs(analogs: list) -> str:
     for i, analog in enumerate(analogs[:5], 1):
         episode = analog.episode
         lines.append(f"{i}. {episode.title} (Relevance: {analog.combined_score:.2f})")
-        lines.append(f"   Arc: {episode.arc_type.value if episode.arc_type else 'unknown'}")
-        lines.append(f"   Phase: {episode.arc_phase.value if episode.arc_phase else 'unknown'}")
+        lines.append("   Pattern: " + (episode.change_pattern.value if episode.change_pattern else "unknown"))
+        lines.append("   Scale: " + (episode.situation_scale.value if episode.situation_scale else "unknown"))
+        if episode.arc_type:
+            lines.append(f"   Legacy arc: {episode.arc_type.value}")
         lines.append(f"   Outcome: {episode.resolution or 'unknown'}")
         lines.append(f"   Consequences: {', '.join(episode.consequences[:2]) if episode.consequences else 'unknown'}")
         lines.append("")

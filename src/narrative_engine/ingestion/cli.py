@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Optional
 
 import click
 from rich.console import Console
@@ -158,7 +157,7 @@ def _display_result(result, compact: bool = False):
                 f"{result.chunks_created} chunks"
             )
         else:
-            console.print(f"[bold green]Success![/bold green]")
+            console.print("[bold green]Success![/bold green]")
             console.print(f"Chunks created: {result.chunks_created}")
             console.print(f"Duration: {result.duration_seconds:.2f}s")
             if result.output_files:
@@ -169,7 +168,7 @@ def _display_result(result, compact: bool = False):
         if compact:
             console.print(f"[red]✗[/red] {result.source_path.name}: FAILED")
         else:
-            console.print(f"[bold red]Failed![/bold red]")
+            console.print("[bold red]Failed![/bold red]")
             if result.errors:
                 for error in result.errors:
                     console.print(f"[red]Error: {error}[/red]")

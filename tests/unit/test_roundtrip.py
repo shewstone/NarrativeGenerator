@@ -19,6 +19,7 @@ from narrative_engine.models import (
     ArcAssignment,
     ArcPhase,
     ArcType,
+    ChangePattern,
     ClassificationState,
     Continuation,
     Cycle,
@@ -28,9 +29,14 @@ from narrative_engine.models import (
     Episode,
     EpisodeLink,
     LinkStatus,
+    MechanismFamily,
     MechanismTag,
     ReviewStatus,
     Scope,
+    ScopeKind,
+    SituationConfiguration,
+    SituationDomain,
+    SituationScale,
     SourcePassage,
     Thesis,
     ThesisConfidence,
@@ -81,6 +87,12 @@ def maximal_episode() -> Episode:
         location="United States",
         setting_description="Late-1920s New York financial markets",
         scope_id="us",
+        scope_name="United States",
+        scope_kind=ScopeKind.POLITY,
+        parent_scope_name="Western Civilization",
+        scope_confidence=0.97,
+        scope_evidence="Across the United States, markets fell.",
+        scope_notes="National market treated as the focal scope.",
         actors=[
             Actor(
                 id=uuid4(),
@@ -98,6 +110,23 @@ def maximal_episode() -> Episode:
         resolution="Market bottomed 89% below peak",
         consequences=["Great Depression", "New Deal"],
         mechanism_tags=[MechanismTag.CREDIT_EXPANSION, MechanismTag.ASSET_BUBBLE],
+        change_pattern=ChangePattern.FRAGMENTATION_AND_RELEASE,
+        pattern_confidence=0.91,
+        pattern_rationale="Confidence and coordination break rapidly.",
+        situation_scale=SituationScale.POLITY,
+        domains=[SituationDomain.ECONOMIC, SituationDomain.POLITICAL],
+        configuration=SituationConfiguration(
+            capacity=-0.6,
+            cohesion=-0.5,
+            pressure=0.9,
+            legitimacy=-0.3,
+            adaptability=-0.2,
+            agency=0.4,
+        ),
+        mechanism_families=[
+            MechanismFamily.AMPLIFICATION_FEEDBACK,
+            MechanismFamily.CONTAGION_DIFFUSION,
+        ],
         arc_type=ArcType.CREDIT_BOOM_AND_BUST,
         arc_phase=ArcPhase.PANIC,
         phase_confidence=0.95,
@@ -157,9 +186,7 @@ def maximal_thesis() -> Thesis:
         query_date=_dt(2026, 1, 1),
         analog_episode_ids=[uuid4(), uuid4()],
         analog_similarity_scores=[0.92, 0.87],
-        dominant_continuation=Continuation(
-            description="Soft landing", probability=0.65, supporting_analogs=8
-        ),
+        dominant_continuation=Continuation(description="Soft landing", probability=0.65, supporting_analogs=8),
         alternative_continuations=[("Hard landing", 0.25), ("Melt-up", 0.10)],
         confidence=ThesisConfidence.MEDIUM,
         watch_for_indicators=["credit_contraction", "leverage_buildup"],
@@ -204,6 +231,7 @@ class TestEpisodeRoundTrip:
         fetched = await repo.get_by_id(episode.id)
 
         assert fetched is not None
+
         # Actors come back set-ordered via the association table; compare
         # full dumps order-insensitively, then compare the rest field-by-field.
         def actor_dumps(episode_model):
@@ -245,9 +273,7 @@ class TestCycleRoundTrip:
         fetched = await repo.get_by_id(cycle.id)
 
         assert fetched is not None
-        assert fetched.model_dump(exclude=CYCLE_FIELDS_EXCLUDED) == cycle.model_dump(
-            exclude=CYCLE_FIELDS_EXCLUDED
-        )
+        assert fetched.model_dump(exclude=CYCLE_FIELDS_EXCLUDED) == cycle.model_dump(exclude=CYCLE_FIELDS_EXCLUDED)
 
     @pytest.mark.asyncio
     async def test_minimal(self, db_session):
@@ -258,9 +284,7 @@ class TestCycleRoundTrip:
         fetched = await repo.get_by_id(cycle.id)
 
         assert fetched is not None
-        assert fetched.model_dump(exclude=CYCLE_FIELDS_EXCLUDED) == cycle.model_dump(
-            exclude=CYCLE_FIELDS_EXCLUDED
-        )
+        assert fetched.model_dump(exclude=CYCLE_FIELDS_EXCLUDED) == cycle.model_dump(exclude=CYCLE_FIELDS_EXCLUDED)
 
 
 class TestThesisRoundTrip:
@@ -274,9 +298,7 @@ class TestThesisRoundTrip:
         fetched = await repo.get_by_id(thesis.id)
 
         assert fetched is not None
-        assert fetched.model_dump(exclude=THESIS_FIELDS_EXCLUDED) == thesis.model_dump(
-            exclude=THESIS_FIELDS_EXCLUDED
-        )
+        assert fetched.model_dump(exclude=THESIS_FIELDS_EXCLUDED) == thesis.model_dump(exclude=THESIS_FIELDS_EXCLUDED)
 
     @pytest.mark.asyncio
     async def test_minimal(self, db_session):

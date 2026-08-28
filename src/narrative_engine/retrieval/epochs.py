@@ -18,7 +18,9 @@ from typing import Literal
 # v0.7.0 = outcome-free render (resolution/consequences excluded).
 # v0.8.0 = controlled-role tokens + proper-noun/date scrub (T2): free-text
 #          roles and identity markers no longer reach the analogy signal.
-CURRENT_RENDER_VERSION = "render-v0.8.0"
+# v0.9.0 = scale-neutral change pattern/configuration/mechanism families;
+#          focal subgroup/idea names are scrubbed from the analogy signal.
+CURRENT_RENDER_VERSION = "render-v0.9.0"
 
 # The pinned sentence-transformers model (Sec 6.3). Single source of truth:
 # EmbeddingGenerator.DEFAULT_MODEL is derived from this.

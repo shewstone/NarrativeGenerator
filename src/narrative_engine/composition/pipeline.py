@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence
 from datetime import timedelta
+from typing import Dict, List, Optional, Sequence
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,10 +12,8 @@ from sqlalchemy.orm import selectinload
 
 from narrative_engine.composition.arc_instance import (
     ArcInstance,
-    CompositionStatus,
-    PhaseCoverage,
 )
-from narrative_engine.composition.identity import ArcIdentityResolver
+from narrative_engine.composition.identity import ArcIdentityResolver, _episode_date_key
 from narrative_engine.models import (
     ArcPhase,
     ArcType,
@@ -26,7 +24,11 @@ from narrative_engine.models import (
     LinkStatus,
     ReviewStatus,
 )
-from narrative_engine.storage.orm_models import EpisodeORM
+from narrative_engine.storage.orm_models import (
+    CycleMembershipORM,
+    CycleORM,
+    EpisodeORM,
+)
 from narrative_engine.storage.repositories import CycleMembershipRepository, CycleRepository
 
 
@@ -71,21 +73,16 @@ def _infer_expected_phases(arc_type: ArcType) -> List[ArcPhase]:
             ArcPhase.PANIC,
             ArcPhase.REVULSION,
         ]
-    # Generic narrative arcs
-    elif arc_type in [
-        ArcType.RISE_AND_OVEREXTENSION,
-        ArcType.HUBRIS_NEMESIS,
-    ]:
-        return [
-            ArcPhase.SETUP,
-            ArcPhase.RISING_ACTION,
-            ArcPhase.CLIMAX,
-            ArcPhase.FALLING_ACTION,
-            ArcPhase.RESOLUTION,
-        ]
-    # Default: all phases
-    else:
-        return list(ArcPhase)
+    # Every non-financial legacy interpretation uses the standard episode
+    # phase vocabulary. Returning every enum value here previously inserted
+    # boom/panic/revulsion gaps into political and personal arcs.
+    return [
+        ArcPhase.SETUP,
+        ArcPhase.RISING_ACTION,
+        ArcPhase.CLIMAX,
+        ArcPhase.FALLING_ACTION,
+        ArcPhase.RESOLUTION,
+    ]
 
 
 def _build_instance_from_cluster(
@@ -104,12 +101,14 @@ def _build_instance_from_cluster(
     start_year = first_ep.start_date.year if first_ep.start_date else "?"
     end_year = last_ep.end_date.year if last_ep.end_date else "?"
 
-    canonical_name = f"{arc_type.value}, {location}, {start_year}–{end_year}"
+    focal_scope = first_ep.scope_id or first_ep.scope_name
+    scope_label = first_ep.scope_name or location
+    canonical_name = f"{arc_type.value}, {scope_label}, {start_year}–{end_year}"
 
     instance = ArcInstance(
         arc_type=arc_type,
         canonical_name=canonical_name,
-        scope_id=first_ep.scope_id,
+        scope_id=focal_scope,
         start_date=first_ep.start_date,
         end_date=last_ep.end_date,
     )
@@ -127,6 +126,8 @@ def _build_instance_from_cluster(
                 confidence=episode.phase_confidence or 0.5,
                 date=episode.start_date,
             )
+        else:
+            instance.unphased_episode_ids.append(episode.id)
 
     if expected_phases:
         instance.identify_gaps(expected_phases)
@@ -159,7 +160,7 @@ def _cluster_within_scope(
     layer entirely, defeating the point of tracking phase_coverage gaps
     (Sec 6.2 stage 6: "making documentation gaps in an instance visible").
     """
-    sorted_eps = sorted(episodes, key=lambda e: e.start_date)
+    sorted_eps = sorted(episodes, key=_episode_date_key)
 
     clusters: List[List[Episode]] = []
     current: List[Episode] = []
@@ -227,16 +228,21 @@ def compose_arc_instances_from_episodes(
     # (false-split protection). Unresolved labels keep their raw string as
     # the partition key: distinct unknown labels never merge with each
     # other, which preserves the false-merge protection this filter is for.
-    from narrative_engine.scopes import resolve_scope
+    from narrative_engine.scopes import DEFAULT_SCOPE_CONFIDENCE_FLOOR, scope_partition_key
 
     by_scope: Dict[str, List[Episode]] = {}
     unscoped: List[Episode] = []
     for episode in relevant:
-        if episode.scope_id is None:
+        # A low-confidence scope claim is retained for audit but may not
+        # participate in a hard identity partition.
+        if episode.scope_confidence is not None and episode.scope_confidence < DEFAULT_SCOPE_CONFIDENCE_FLOOR:
             unscoped.append(episode)
         else:
-            partition_key = resolve_scope(episode.scope_id) or episode.scope_id
-            by_scope.setdefault(partition_key, []).append(episode)
+            partition_key = scope_partition_key(episode.scope_id, episode.scope_name)
+            if partition_key is None:
+                unscoped.append(episode)
+            else:
+                by_scope.setdefault(partition_key, []).append(episode)
 
     instances: List[ArcInstance] = []
     for scope_episodes in by_scope.values():
@@ -339,14 +345,10 @@ class CompositionPipeline:
         await cycle_repo.create(cycle)
 
         all_episode_ids = {
-            episode_id
-            for coverage in instance.phases.values()
-            for episode_id in coverage.episode_ids
-        }
+            episode_id for coverage in instance.phases.values() for episode_id in coverage.episode_ids
+        } | set(instance.unphased_episode_ids)
         review_status = (
-            ReviewStatus.PENDING
-            if len(all_episode_ids) > self.config.min_episodes_per_cluster
-            else ReviewStatus.AUTO
+            ReviewStatus.PENDING if len(all_episode_ids) > self.config.min_episodes_per_cluster else ReviewStatus.AUTO
         )
 
         for phase, coverage in instance.phases.items():
@@ -366,7 +368,104 @@ class CompositionPipeline:
                     )
                 )
 
+        for episode_id in instance.unphased_episode_ids:
+            await membership_repo.create(
+                CycleMembership(
+                    episode_id=episode_id,
+                    cycle_id=cycle.id,
+                    phase_coverage=[],
+                    link_status=LinkStatus.INFERRED,
+                    review_status=review_status,
+                )
+            )
+
         return cycle
+
+    async def reconcile_instances(
+        self,
+        instances: Sequence[ArcInstance],
+        arc_type: ArcType,
+    ) -> List[Cycle]:
+        """Persist the current composition without accumulating snapshots.
+
+        Exact existing instances are reused, preserving their review state.
+        Instances whose episode membership changed are replaced in the same
+        transaction, and duplicate/stale snapshots from earlier runs are
+        removed. This bounds database growth as the watcher recomposes an arc
+        after each newly ingested document.
+        """
+        result = await self.session.execute(
+            select(CycleORM).where(CycleORM.is_arc_instance.is_(True)).options(selectinload(CycleORM.episodes))
+        )
+        existing = [
+            cycle
+            for cycle in result.scalars().unique().all()
+            if arc_type.value
+            in {value.value if isinstance(value, ArcType) else value for value in (cycle.dominant_arc_types or [])}
+        ]
+
+        memberships_by_cycle: Dict = {}
+        if existing:
+            membership_result = await self.session.execute(
+                select(CycleMembershipORM).where(CycleMembershipORM.cycle_id.in_([cycle.id for cycle in existing]))
+            )
+            for membership in membership_result.scalars().all():
+                memberships_by_cycle.setdefault(membership.cycle_id, []).append(membership)
+
+        by_fingerprint: Dict = {}
+        for cycle in existing:
+            fingerprint = (
+                cycle.scope_id,
+                frozenset(episode.id for episode in cycle.episodes),
+            )
+            by_fingerprint.setdefault(fingerprint, []).append(cycle)
+
+        reused_ids = set()
+        persisted: List[Cycle] = []
+        cycle_repo = CycleRepository(self.session)
+        phase_order = _infer_expected_phases(arc_type)
+
+        for instance in instances:
+            episode_ids = {
+                episode_id for coverage in instance.phases.values() for episode_id in coverage.episode_ids
+            } | set(instance.unphased_episode_ids)
+            fingerprint = (instance.scope_id, frozenset(episode_ids))
+            candidates = by_fingerprint.get(fingerprint, [])
+            existing_cycle = next(
+                (cycle for cycle in candidates if cycle.id not in reused_ids),
+                None,
+            )
+
+            if existing_cycle is None:
+                persisted.append(await self.persist_instance(instance, arc_type))
+                continue
+
+            reused_ids.add(existing_cycle.id)
+            existing_cycle.name = instance.canonical_name
+            existing_cycle.scale = self.config.scale
+            existing_cycle.scope_id = instance.scope_id
+            existing_cycle.start_date = instance.start_date
+            existing_cycle.end_date = instance.end_date
+            existing_cycle.dominant_arc_types = [arc_type.value]
+
+            phase_by_episode = {
+                episode_id: [phase_order.index(phase)] if phase in phase_order else []
+                for phase, coverage in instance.phases.items()
+                for episode_id in coverage.episode_ids
+            }
+            for episode_id in instance.unphased_episode_ids:
+                phase_by_episode[episode_id] = []
+            for membership in memberships_by_cycle.get(existing_cycle.id, []):
+                membership.phase_coverage = phase_by_episode.get(membership.episode_id, [])
+
+            persisted.append(cycle_repo._from_orm(existing_cycle))
+
+        for cycle in existing:
+            if cycle.id not in reused_ids:
+                await self.session.delete(cycle)
+
+        await self.session.flush()
+        return persisted
 
     async def _get_episodes_by_arc(self, arc_type: ArcType) -> Sequence[EpisodeORM]:
         """Fetch all episodes of a given arc type."""
@@ -393,11 +492,7 @@ class CompositionPipeline:
             candidates = await self._find_gap_fillers(instance, phase)
 
             for candidate in candidates:
-                source_ids = [
-                    sp.work_id
-                    for sp in candidate.source_passages
-                    if hasattr(sp, "work_id")
-                ]
+                source_ids = [sp.work_id for sp in candidate.source_passages if hasattr(sp, "work_id")]
                 source_id = source_ids[0] if source_ids else "unknown"
 
                 instance.add_episode_to_phase(
@@ -414,9 +509,7 @@ class CompositionPipeline:
 
         return instance
 
-    async def _find_gap_fillers(
-        self, instance: ArcInstance, phase: ArcPhase
-    ) -> Sequence[EpisodeORM]:
+    async def _find_gap_fillers(self, instance: ArcInstance, phase: ArcPhase) -> Sequence[EpisodeORM]:
         """Find episodes that could fill a gap in an Arc Instance."""
         if not instance.start_date or not instance.end_date:
             return []

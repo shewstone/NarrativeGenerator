@@ -1,5 +1,5 @@
 {
-  "version": "scope-v0.1.1",
+  "version": "scope-v0.2.0",
   "_comment": "Versioned scope registry (T5, design doc Sec 4/Sec 9). Scope boundaries are contested claims: entries are hypotheses, not ontology. Bump `version` on any change; unresolved raw strings logged by the resolver are the promotion queue for new aliases.",
   "scopes": [
     {
@@ -142,6 +142,20 @@
         "Imperial China"
       ],
       "notes": "Spans dynastic breaks per the design doc's default hypothesis (Sec 9)."
+    },
+    {
+      "id": "chinese_communist_party",
+      "kind": "party",
+      "name": "Communist Party of China",
+      "parent_scope_id": "china",
+      "aliases": [
+        "Chinese Communist Party",
+        "CPC",
+        "CCP",
+        "Chinese communist movement",
+        "Chinese communists"
+      ],
+      "notes": "The party and the wider communist movement are not identical; movement aliases are retained as a reviewable registry hypothesis for coarse historical extraction."
     },
     {
       "id": "japan",

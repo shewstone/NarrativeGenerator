@@ -6,7 +6,6 @@ missing signal, and the re-embed job restores staleness to zero
 idempotently.
 """
 
-from uuid import uuid4
 
 import pytest
 
@@ -22,7 +21,7 @@ from narrative_engine.storage.repositories import EpisodeRepository
 
 
 def _episode(**kwargs) -> Episode:
-    defaults = dict(title="Test", summary="Test episode")
+    defaults = {"title": "Test", "summary": "Test episode"}
     defaults.update(kwargs)
     return Episode(**defaults)
 
@@ -109,12 +108,12 @@ class TestCompositionEpochDiscipline:
 
     def test_epoch_mismatch_does_not_count_toward_evidence_floor(self):
         resolver = ArcIdentityResolver(min_evidence_signals=2)
-        base = dict(
-            scope_id="us",
-            arc_type=None,
-            arc_phase=None,
-            surface_embedding=[1.0] * 384,
-        )
+        base = {
+            "scope_id": "us",
+            "arc_type": None,
+            "arc_phase": None,
+            "surface_embedding": [1.0] * 384,
+        }
         # Only two potentially-concrete signals here: surface + actors=none,
         # dates=none, phases=none. With matching epochs surface counts (1
         # signal -> still below floor); the point is mismatch must not count

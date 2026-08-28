@@ -12,9 +12,9 @@ from __future__ import annotations
 
 import asyncio
 import os
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from importlib import resources
-from typing import AsyncGenerator, Optional
+from typing import Annotated, AsyncGenerator, Optional
 from uuid import UUID
 
 import numpy as np
@@ -25,6 +25,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from narrative_engine.logging_config import get_logger
+from narrative_engine.scopes import (
+    DEFAULT_SCOPE_CONFIDENCE_FLOOR,
+    get_registry,
+    scope_partition_key,
+)
 from narrative_engine.storage.orm_models import (
     CycleMembershipORM,
     CycleORM,
@@ -41,7 +46,7 @@ def _pca_3d(vectors: np.ndarray) -> tuple[np.ndarray, list[float]]:
     """Deterministic, dependency-light 3D projection for exploration only."""
     centered = vectors - vectors.mean(axis=0, keepdims=True)
     if len(vectors) == 1 or not np.any(centered):
-        return np.zeros((len(vectors), 3)), [0.0, 0.0, 0.0]
+        return np.zeros((len(vectors), 3), dtype=vectors.dtype), [0.0, 0.0, 0.0]
     u, singular_values, _ = np.linalg.svd(centered, full_matrices=False)
     dimensions = min(3, len(singular_values))
     projected = u[:, :dimensions] * singular_values[:dimensions]
@@ -66,6 +71,9 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
+
+
 class ReviewDecision(BaseModel):
     decision: str  # "approved" | "rejected"
 
@@ -77,30 +85,35 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         watcher_task = None
+        from narrative_engine.storage.database import db_manager
+        from narrative_engine.storage.repositories import ScopeRepository
+
+        # Keep the queryable SQL mirror aligned with the packaged, versioned
+        # hierarchy before extraction/composition starts.
+        async with db_manager.session() as session:
+            await ScopeRepository(session).sync_from_registry()
+            await session.commit()
         if start_watcher:
             from narrative_engine.watcher import watch_loop
 
             watcher_task = asyncio.create_task(watch_loop())
-        yield
-        if watcher_task:
-            watcher_task.cancel()
-            try:
-                await watcher_task
-            except asyncio.CancelledError:
-                pass
+        try:
+            yield
+        finally:
+            if watcher_task:
+                watcher_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await watcher_task
+            await db_manager.close()
 
     app = FastAPI(title="Narrative Engine", lifespan=lifespan)
 
     @app.get("/", response_class=HTMLResponse)
     async def dashboard() -> str:
-        return (
-            resources.files("narrative_engine.api")
-            .joinpath("static/dashboard.html")
-            .read_text()
-        )
+        return resources.files("narrative_engine.api").joinpath("static/dashboard.html").read_text()
 
     @app.get("/api/health")
-    async def health(session: AsyncSession = Depends(get_session)) -> dict:
+    async def health(session: SessionDep) -> dict:
         async def count(stmt):
             return (await session.execute(stmt)).scalar() or 0
 
@@ -108,27 +121,17 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
             "status": "ok",
             "documents": await count(select(func.count(SourceDocumentORM.id))),
             "episodes": await count(select(func.count(EpisodeORM.id))),
-            "arc_instances": await count(
-                select(func.count(CycleORM.id)).where(CycleORM.is_arc_instance)
-            ),
+            "arc_instances": await count(select(func.count(CycleORM.id)).where(CycleORM.is_arc_instance)),
             "pending_reviews": (
                 await count(
-                    select(func.count(CycleMembershipORM.id)).where(
-                        CycleMembershipORM.review_status == "pending"
-                    )
+                    select(func.count(CycleMembershipORM.id)).where(CycleMembershipORM.review_status == "pending")
                 )
             )
-            + (
-                await count(
-                    select(func.count(EpisodeLinkORM.id)).where(
-                        EpisodeLinkORM.review_status == "pending"
-                    )
-                )
-            ),
+            + (await count(select(func.count(EpisodeLinkORM.id)).where(EpisodeLinkORM.review_status == "pending"))),
         }
 
     @app.get("/api/documents")
-    async def documents(session: AsyncSession = Depends(get_session)) -> list:
+    async def documents(session: SessionDep) -> list:
         repo = SourceDocumentRepository(session)
         return [
             {
@@ -149,17 +152,14 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
         ]
 
     @app.get("/api/arc-instances")
-    async def arc_instances(session: AsyncSession = Depends(get_session)) -> list:
+    async def arc_instances(session: SessionDep) -> list:
         from narrative_engine.composition.pipeline import _infer_expected_phases
         from narrative_engine.models import ArcType
 
         cycles = (
             (
                 await session.execute(
-                    select(CycleORM)
-                    .where(CycleORM.is_arc_instance)
-                    .order_by(CycleORM.created_at.desc())
-                    .limit(100)
+                    select(CycleORM).where(CycleORM.is_arc_instance).order_by(CycleORM.created_at.desc()).limit(100)
                 )
             )
             .scalars()
@@ -170,28 +170,14 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
 
         cycle_ids = [c.id for c in cycles]
         memberships = (
-            (
-                await session.execute(
-                    select(CycleMembershipORM).where(
-                        CycleMembershipORM.cycle_id.in_(cycle_ids)
-                    )
-                )
-            )
+            (await session.execute(select(CycleMembershipORM).where(CycleMembershipORM.cycle_id.in_(cycle_ids))))
             .scalars()
             .all()
         )
         episode_ids = {m.episode_id for m in memberships}
         episodes = {}
         if episode_ids:
-            rows = (
-                (
-                    await session.execute(
-                        select(EpisodeORM).where(EpisodeORM.id.in_(episode_ids))
-                    )
-                )
-                .scalars()
-                .all()
-            )
+            rows = (await session.execute(select(EpisodeORM).where(EpisodeORM.id.in_(episode_ids)))).scalars().all()
             episodes = {e.id: e for e in rows}
 
         by_cycle: dict = {}
@@ -206,22 +192,20 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
             elif cycle.name and "," in cycle.name:
                 arc_value = cycle.name.split(",")[0].strip()
             expected_phases = []
-            try:
-                expected_phases = [
-                    p.value for p in _infer_expected_phases(ArcType(arc_value))
-                ]
-            except (ValueError, TypeError):
-                pass
+            with suppress(ValueError, TypeError):
+                expected_phases = [p.value for p in _infer_expected_phases(ArcType(arc_value))]
 
             members = []
             for m in sorted(
                 by_cycle.get(cycle.id, []),
                 key=lambda m: (
-                    episodes[m.episode_id].start_date is None,
-                    episodes[m.episode_id].start_date,
-                )
-                if m.episode_id in episodes
-                else (True, None),
+                    (
+                        episodes[m.episode_id].start_date is None,
+                        episodes[m.episode_id].start_date,
+                    )
+                    if m.episode_id in episodes
+                    else (True, None)
+                ),
             ):
                 episode = episodes.get(m.episode_id)
                 if episode is None:
@@ -231,12 +215,8 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
                         "id": str(episode.id),
                         "title": episode.title,
                         "phase": episode.arc_phase.value if episode.arc_phase else None,
-                        "start_date": episode.start_date.isoformat()
-                        if episode.start_date
-                        else None,
-                        "end_date": episode.end_date.isoformat()
-                        if episode.end_date
-                        else None,
+                        "start_date": episode.start_date.isoformat() if episode.start_date else None,
+                        "end_date": episode.end_date.isoformat() if episode.end_date else None,
                         "link_status": m.link_status,
                         "review_status": m.review_status,
                         "membership_id": str(m.id),
@@ -261,9 +241,9 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
 
     @app.get("/api/arc-space")
     async def arc_space(
+        session: SessionDep,
         k: int = Query(3, ge=1, le=10),
         limit: int = Query(500, ge=1, le=1000),
-        session: AsyncSession = Depends(get_session),
     ) -> dict:
         """Project structural vectors and explain graph relationships.
 
@@ -278,8 +258,7 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
                     select(EpisodeORM)
                     .where(
                         EpisodeORM.structural_embedding.is_not(None),
-                        EpisodeORM.structural_embedding_epoch
-                        == current_epoch("structural"),
+                        EpisodeORM.structural_embedding_epoch == current_epoch("structural"),
                     )
                     .order_by(EpisodeORM.start_date, EpisodeORM.created_at)
                     .limit(limit)
@@ -302,40 +281,40 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
                 "edges": [],
             }
 
-        vectors = np.asarray(
-            [np.asarray(episode.structural_embedding, dtype=float) for episode in episodes]
-        )
+        vectors = np.asarray([np.asarray(episode.structural_embedding, dtype=np.float32) for episode in episodes])
         coordinates, explained = _pca_3d(vectors)
         similarities = _cosine_similarities(vectors)
         episode_ids = [episode.id for episode in episodes]
+        episode_index = {episode_id: index for index, episode_id in enumerate(episode_ids)}
         selected_ids = set(episode_ids)
         by_id = {episode.id: episode for episode in episodes}
 
         memberships = (
-            (
-                await session.execute(
-                    select(CycleMembershipORM, CycleORM)
-                    .join(CycleORM, CycleMembershipORM.cycle_id == CycleORM.id)
-                    .where(
-                        CycleORM.is_arc_instance,
-                        CycleMembershipORM.episode_id.in_(selected_ids),
-                        CycleMembershipORM.review_status != "rejected",
-                    )
+            await session.execute(
+                select(CycleMembershipORM, CycleORM)
+                .join(CycleORM, CycleMembershipORM.cycle_id == CycleORM.id)
+                .where(
+                    CycleORM.is_arc_instance,
+                    CycleMembershipORM.episode_id.in_(selected_ids),
+                    CycleMembershipORM.review_status != "rejected",
                 )
             )
-            .all()
-        )
+        ).all()
         memberships_by_episode: dict = {}
         memberships_by_cycle: dict = {}
         for membership, cycle in memberships:
-            memberships_by_episode.setdefault(membership.episode_id, []).append(
-                (membership, cycle)
-            )
+            memberships_by_episode.setdefault(membership.episode_id, []).append((membership, cycle))
             memberships_by_cycle.setdefault(cycle.id, []).append((membership, cycle))
 
         nodes = []
+        scope_registry = get_registry()
         for index, episode in enumerate(episodes):
             episode_memberships = memberships_by_episode.get(episode.id, [])
+            registered_lineage = scope_registry.lineage(episode.scope_id)
+            if registered_lineage:
+                scope_path = [scope.name for scope in reversed(registered_lineage)]
+            else:
+                scope_path = [label for label in (episode.parent_scope_name, episode.scope_name) if label]
             nodes.append(
                 {
                     "id": str(episode.id),
@@ -351,7 +330,21 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
                     "start_date": episode.start_date.isoformat() if episode.start_date else None,
                     "end_date": episode.end_date.isoformat() if episode.end_date else None,
                     "scope_id": episode.scope_id,
+                    "scope_name": episode.scope_name,
+                    "scope_kind": episode.scope_kind,
+                    "parent_scope_name": episode.parent_scope_name,
+                    "scope_confidence": episode.scope_confidence,
+                    "scope_evidence": episode.scope_evidence,
+                    "scope_notes": episode.scope_notes,
+                    "scope_path": scope_path,
                     "location": episode.location,
+                    "change_pattern": episode.change_pattern,
+                    "pattern_confidence": float(episode.pattern_confidence or 0.0),
+                    "pattern_rationale": episode.pattern_rationale,
+                    "situation_scale": episode.situation_scale,
+                    "domains": list(episode.domains or []),
+                    "configuration": dict(episode.configuration or {}),
+                    "mechanism_families": list(episode.mechanism_families or []),
                     "mechanisms": list(episode.mechanism_tags or []),
                     "source_chunks": list(episode.extracted_from or []),
                     "arc_instances": [
@@ -378,13 +371,14 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
                     continue
                 seen_neighbors.add(pair)
                 target = episodes[target_index]
-                shared = sorted(
-                    set(source.mechanism_tags or []) & set(target.mechanism_tags or [])
-                )
+                source_scope_key = scope_partition_key(source.scope_id, source.scope_name)
+                target_scope_key = scope_partition_key(target.scope_id, target.scope_name)
+                shared = sorted(set(source.mechanism_tags or []) & set(target.mechanism_tags or []))
                 surface_similarity = None
                 if source.surface_embedding is not None and target.surface_embedding is not None:
                     surface_pair = np.asarray(
-                        [source.surface_embedding, target.surface_embedding], dtype=float
+                        [source.surface_embedding, target.surface_embedding],
+                        dtype=np.float32,
                     )
                     surface_similarity = float(_cosine_similarities(surface_pair)[0, 1])
                 structural_similarity = float(similarities[source_index, target_index])
@@ -406,11 +400,48 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
                                 )
                             ),
                             "same_arc_type": source.arc_type == target.arc_type,
-                            "same_scope": bool(
-                                source.scope_id
-                                and target.scope_id
-                                and source.scope_id == target.scope_id
+                            "same_change_pattern": (
+                                source.change_pattern == target.change_pattern and source.change_pattern is not None
                             ),
+                            "same_scope": bool(source_scope_key and source_scope_key == target_scope_key),
+                            "projection_is_approximate": True,
+                        },
+                    }
+                )
+
+        # A non-causal trajectory for each focal subject makes the formation,
+        # expansion, contestation, and decline of a party/faction/movement
+        # visible even when it has no legacy ArcType composition yet.
+        episodes_by_scope: dict[str, list[EpisodeORM]] = {}
+        for episode in episodes:
+            if episode.scope_confidence is not None and episode.scope_confidence < DEFAULT_SCOPE_CONFIDENCE_FLOOR:
+                continue
+            key = scope_partition_key(episode.scope_id, episode.scope_name)
+            if key and episode.start_date and episode.change_pattern:
+                episodes_by_scope.setdefault(key, []).append(episode)
+
+        for scope_episodes in episodes_by_scope.values():
+            ordered_scope_episodes = sorted(
+                scope_episodes,
+                key=lambda episode: (episode.start_date, episode.created_at),
+            )
+            for source, target in zip(
+                ordered_scope_episodes,
+                ordered_scope_episodes[1:],
+                strict=False,
+            ):
+                edges.append(
+                    {
+                        "source": str(source.id),
+                        "target": str(target.id),
+                        "kind": "scope_sequence",
+                        "scope_name": source.scope_name or source.scope_id,
+                        "source_pattern": source.change_pattern,
+                        "target_pattern": target.change_pattern,
+                        "link_status": "attested",
+                        "review_status": "auto",
+                        "explanation": {
+                            "summary": "Chronological observations of the same focal scope; not a causal claim",
                             "projection_is_approximate": True,
                         },
                     }
@@ -425,9 +456,7 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
                     by_id[item[0].episode_id].created_at,
                 ),
             )
-            for (source_membership, cycle), (target_membership, _) in zip(
-                ordered, ordered[1:], strict=False
-            ):
+            for (source_membership, cycle), (target_membership, _) in zip(ordered, ordered[1:], strict=False):
                 source = by_id[source_membership.episode_id]
                 target = by_id[target_membership.episode_id]
                 edges.append(
@@ -440,13 +469,10 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
                         "link_status": target_membership.link_status,
                         "review_status": target_membership.review_status,
                         "structural_similarity": float(
-                            similarities[
-                                episode_ids.index(source.id), episode_ids.index(target.id)
-                            ]
+                            similarities[episode_index[source.id], episode_index[target.id]]
                         ),
                         "shared_mechanisms": sorted(
-                            set(source.mechanism_tags or [])
-                            & set(target.mechanism_tags or [])
+                            set(source.mechanism_tags or []) & set(target.mechanism_tags or [])
                         ),
                         "explanation": {
                             "summary": (
@@ -479,11 +505,7 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
                     "source": str(link.source_episode_id),
                     "target": str(link.target_episode_id),
                     "kind": link.edge_kind,
-                    "confidence": (
-                        max(0.0, 1.0 - float(link.distance))
-                        if link.distance is not None
-                        else None
-                    ),
+                    "confidence": (max(0.0, 1.0 - float(link.distance)) if link.distance is not None else None),
                     "link_status": link.link_status,
                     "review_status": link.review_status,
                     "evidence": link.evidence,
@@ -509,39 +531,26 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
         }
 
     @app.get("/api/review-queue")
-    async def review_queue(session: AsyncSession = Depends(get_session)) -> dict:
+    async def review_queue(session: SessionDep) -> dict:
         memberships = (
-            (
-                await session.execute(
-                    select(CycleMembershipORM, CycleORM.name, EpisodeORM.title)
-                    .join(CycleORM, CycleMembershipORM.cycle_id == CycleORM.id)
-                    .join(EpisodeORM, CycleMembershipORM.episode_id == EpisodeORM.id)
-                    .where(CycleMembershipORM.review_status == "pending")
-                    .limit(100)
-                )
+            await session.execute(
+                select(CycleMembershipORM, CycleORM.name, EpisodeORM.title)
+                .join(CycleORM, CycleMembershipORM.cycle_id == CycleORM.id)
+                .join(EpisodeORM, CycleMembershipORM.episode_id == EpisodeORM.id)
+                .where(CycleMembershipORM.review_status == "pending")
+                .limit(100)
             )
-            .all()
-        )
+        ).all()
         links = (
-            (
-                await session.execute(
-                    select(EpisodeLinkORM).where(EpisodeLinkORM.review_status == "pending").limit(100)
-                )
-            )
+            (await session.execute(select(EpisodeLinkORM).where(EpisodeLinkORM.review_status == "pending").limit(100)))
             .scalars()
             .all()
         )
-        episode_ids = {l.source_episode_id for l in links} | {
-            l.target_episode_id for l in links
-        }
+        episode_ids = {link.source_episode_id for link in links} | {link.target_episode_id for link in links}
         titles = {}
         if episode_ids:
             rows = (
-                await session.execute(
-                    select(EpisodeORM.id, EpisodeORM.title).where(
-                        EpisodeORM.id.in_(episode_ids)
-                    )
-                )
+                await session.execute(select(EpisodeORM.id, EpisodeORM.title).where(EpisodeORM.id.in_(episode_ids)))
             ).all()
             titles = {row.id: row.title for row in rows}
 
@@ -557,14 +566,14 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
             ],
             "links": [
                 {
-                    "id": str(l.id),
-                    "edge_kind": l.edge_kind,
-                    "link_status": l.link_status,
-                    "source": titles.get(l.source_episode_id, "?"),
-                    "target": titles.get(l.target_episode_id, "?"),
-                    "evidence": l.evidence,
+                    "id": str(link.id),
+                    "edge_kind": link.edge_kind,
+                    "link_status": link.link_status,
+                    "source": titles.get(link.source_episode_id, "?"),
+                    "target": titles.get(link.target_episode_id, "?"),
+                    "evidence": link.evidence,
                 }
-                for l in links
+                for link in links
             ],
         }
 
@@ -577,9 +586,7 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
         return {"id": str(orm_row.id), "review_status": decision}
 
     @app.post("/api/documents/{document_id}/retry")
-    async def retry_document(
-        document_id: UUID, session: AsyncSession = Depends(get_session)
-    ) -> dict:
+    async def retry_document(document_id: UUID, session: SessionDep) -> dict:
         """Queue a row so the watcher resumes it on the next scan.
 
         Retryable: failed rows, and completed rows whose extraction never
@@ -591,9 +598,7 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
         row = await session.get(SourceDocumentORM, document_id)
         if row is None:
             raise HTTPException(404, "document not found")
-        retryable = row.status == "failed" or (
-            row.status == "completed" and not row.extraction_ran
-        )
+        retryable = row.status == "failed" or (row.status == "completed" and not row.extraction_ran)
         if not retryable:
             raise HTTPException(
                 409,
@@ -609,7 +614,7 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
     async def review_membership(
         membership_id: UUID,
         body: ReviewDecision,
-        session: AsyncSession = Depends(get_session),
+        session: SessionDep,
     ) -> dict:
         row = await session.get(CycleMembershipORM, membership_id)
         if row is None:
@@ -620,7 +625,7 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
     async def review_link(
         link_id: UUID,
         body: ReviewDecision,
-        session: AsyncSession = Depends(get_session),
+        session: SessionDep,
     ) -> dict:
         row = await session.get(EpisodeLinkORM, link_id)
         if row is None:

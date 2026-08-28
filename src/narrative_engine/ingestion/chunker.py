@@ -143,15 +143,15 @@ class SmartChunker:
         # A single paragraph can exceed the target size on its own (OCR'd
         # text, texts without paragraph breaks) -- hard-split those by word
         # windows first, or the paragraph loop below emits them whole.
-        max_words = max(1, int(self.config.target_chunk_size * 0.75))
+        target_words = max(1, int(self.config.target_chunk_size * 0.75))
         split_paragraphs: List[str] = []
         for paragraph in paragraphs:
             words = paragraph.split()
-            if len(words) <= max_words:
+            if len(words) <= target_words:
                 split_paragraphs.append(paragraph)
             else:
-                for i in range(0, len(words), max_words):
-                    split_paragraphs.append(" ".join(words[i : i + max_words]))
+                for i in range(0, len(words), target_words):
+                    split_paragraphs.append(" ".join(words[i : i + target_words]))
         paragraphs = split_paragraphs
 
         chunks = []
@@ -163,10 +163,7 @@ class SmartChunker:
             para_word_count = len(paragraph.split())
 
             # If adding this paragraph exceeds max size, finalize current chunk
-            if (
-                current_chunk
-                and current_word_count + para_word_count > self.config.target_chunk_size
-            ):
+            if current_chunk and current_word_count + para_word_count > target_words:
                 chunk_text = "\n\n".join(current_chunk)
                 chunks.append(
                     Chunk(
@@ -184,10 +181,10 @@ class SmartChunker:
 
                 # Keep last paragraph for overlap (if configured)
                 if self.config.overlap_tokens > 0:
-                    overlap_words = int(self.config.overlap_tokens * 0.75)
-                    overlap_para = current_chunk[-1] if current_chunk else ""
-                    current_chunk = [overlap_para, paragraph]
-                    current_word_count = len(overlap_para.split()) + para_word_count
+                    overlap_words = max(1, int(self.config.overlap_tokens * 0.75))
+                    overlap = " ".join(chunk_text.split()[-overlap_words:])
+                    current_chunk = [part for part in (overlap, paragraph) if part]
+                    current_word_count = len(overlap.split()) + para_word_count
                 else:
                     current_chunk = [paragraph]
                     current_word_count = para_word_count

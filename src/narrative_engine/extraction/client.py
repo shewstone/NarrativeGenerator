@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import os
 import re
@@ -26,6 +27,116 @@ logger = structlog.get_logger()
 T = TypeVar("T", bound=BaseModel)
 
 
+def materialize_segment_spans(text: str, raw_segments: Any) -> List[Dict[str, Any]]:
+    """Attach source-backed text to LLM-produced episode boundaries.
+
+    The segmenter is asked for character offsets and verbatim boundary
+    quotes.  Both are treated as untrusted: offsets are validated against
+    the quotes, and quotes are located in source order when the offsets are
+    inaccurate.  A multi-episode response is accepted only when every span
+    resolves without overlap.  Otherwise the source is returned once as a
+    single fallback segment, avoiding both dropped text and the previous
+    full-chunk-per-episode token explosion.
+    """
+    if not isinstance(raw_segments, list):
+        return []
+
+    segments = [dict(segment) for segment in raw_segments if isinstance(segment, dict)]
+    if not segments:
+        return []
+
+    if len(segments) == 1:
+        segment = segments[0]
+        segment.update(text=text, start_char=0, end_char=len(text))
+        return [segment]
+
+    resolved: List[Dict[str, Any]] = []
+    cursor = 0
+    for segment in segments:
+        span = _resolve_segment_span(text, segment, cursor)
+        if span is None:
+            return [_segmentation_fallback(text, segments)]
+        start, end = span
+        materialized = dict(segment)
+        materialized.update(text=text[start:end], start_char=start, end_char=end)
+        resolved.append(materialized)
+        cursor = end
+
+    return resolved
+
+
+def _resolve_segment_span(
+    text: str,
+    segment: Dict[str, Any],
+    cursor: int,
+) -> Optional[tuple[int, int]]:
+    """Resolve one non-overlapping segment against the original source."""
+    start_quote = segment.get("start_quote")
+    end_quote = segment.get("end_quote")
+    start_quote = start_quote if isinstance(start_quote, str) and start_quote else None
+    end_quote = end_quote if isinstance(end_quote, str) and end_quote else None
+
+    start = segment.get("start_char")
+    end = segment.get("end_char")
+    if (
+        isinstance(start, int)
+        and not isinstance(start, bool)
+        and isinstance(end, int)
+        and not isinstance(end, bool)
+        and cursor <= start < end <= len(text)
+    ):
+        candidate = text[start:end]
+        if (start_quote is None or candidate.startswith(start_quote)) and (
+            end_quote is None or candidate.endswith(end_quote)
+        ):
+            return start, end
+
+    supplied_text = segment.get("text")
+    if isinstance(supplied_text, str) and supplied_text:
+        start = text.find(supplied_text, cursor)
+        if start >= 0:
+            return start, start + len(supplied_text)
+
+    if start_quote is None or end_quote is None:
+        return None
+    start = text.find(start_quote, cursor)
+    if start < 0:
+        return None
+    if start_quote == end_quote:
+        return start, start + len(start_quote)
+    end_start = text.find(end_quote, start + len(start_quote))
+    if end_start < 0:
+        return None
+    return start, end_start + len(end_quote)
+
+
+def _segmentation_fallback(text: str, segments: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Collapse an unresolvable multi-segment result into one safe unit."""
+    summaries = [
+        str(segment["summary"]).strip()
+        for segment in segments
+        if segment.get("summary") and str(segment["summary"]).strip()
+    ]
+    return {
+        "number": 1,
+        "summary": "; ".join(summaries)[:500] or text[:200],
+        "text": text,
+        "start_char": 0,
+        "end_char": len(text),
+        "segmentation_fallback": "unresolved_source_spans",
+    }
+
+
+async def _close_sdk_client(client: Any) -> None:
+    """Close either SDK's underlying async HTTP transport when available."""
+    close = getattr(client, "close", None) or getattr(client, "aclose", None)
+    if close is None:
+        return
+    result = close()
+    if inspect.isawaitable(result):
+        await result
+
+
 class LLMError(Exception):
     """Base exception for LLM operations."""
 
@@ -37,6 +148,10 @@ class LLMClient(ABC):
 
     def __init__(self, config: LLMConfig) -> None:
         self.config = config
+
+    async def aclose(self) -> None:
+        """Release provider resources. Concrete SDK clients override this."""
+        return None
 
     @abstractmethod
     async def complete(
@@ -71,6 +186,9 @@ class OpenAIClient(LLMClient):
         if config.base_url:
             client_options["base_url"] = config.base_url
         self.client = openai.AsyncOpenAI(**client_options)
+
+    async def aclose(self) -> None:
+        await _close_sdk_client(self.client)
 
     @retry(
         retry=retry_if_exception_type((openai.RateLimitError, openai.APITimeoutError)),
@@ -119,6 +237,12 @@ class OpenAIClient(LLMClient):
                 },
             }
 
+        except (openai.RateLimitError, openai.APITimeoutError) as e:
+            # Preserve these exception types so tenacity can actually retry
+            # them; the broad handler below previously wrapped them in
+            # LLMError before the retry predicate ever saw them.
+            logger.warning("OpenAI transient failure; retrying", error=str(e))
+            raise
         except openai.BadRequestError as e:
             logger.error("OpenAI bad request", error=str(e), model=model)
             raise LLMError(f"Bad request: {e}") from e
@@ -170,10 +294,11 @@ class AnthropicClient(LLMClient):
     def __init__(self, config: LLMConfig, client: Optional[Any] = None) -> None:
         super().__init__(config)
         self.client = client or anthropic.AsyncAnthropic(
-            api_key=config.api_key
-            or os.getenv("ANTHROPIC_API_KEY")
-            or os.getenv("NE_LLM_API_KEY"),
+            api_key=config.api_key or os.getenv("ANTHROPIC_API_KEY") or os.getenv("NE_LLM_API_KEY"),
         )
+
+    async def aclose(self) -> None:
+        await _close_sdk_client(self.client)
 
     async def complete(
         self,
@@ -217,14 +342,9 @@ class AnthropicClient(LLMClient):
         if response.stop_reason == "refusal":
             raise LLMError(f"Model refused the request (model={model})")
         if response.stop_reason == "max_tokens":
-            raise LLMError(
-                f"Response truncated at max_tokens={max_tokens} (model={model}); "
-                "raise NE_LLM_MAX_TOKENS"
-            )
+            raise LLMError(f"Response truncated at max_tokens={max_tokens} (model={model}); raise NE_LLM_MAX_TOKENS")
 
-        content = next(
-            (block.text for block in response.content if block.type == "text"), ""
-        )
+        content = next((block.text for block in response.content if block.type == "text"), "")
         if not content:
             raise LLMError("Empty response from Anthropic")
 
@@ -281,6 +401,9 @@ class ExtractionPipeline:
         self.config = config
         self.logger = structlog.get_logger()
 
+    async def aclose(self) -> None:
+        await self.client.aclose()
+
     def _create_default_client(self) -> LLMClient:
         """Create default LLM client from environment."""
         llm_config = LLMConfig.from_env()
@@ -307,6 +430,8 @@ class ExtractionPipeline:
             prompt=prompt,
             model=model or (self.config.segmentation_model if self.config else None),
         )
+
+        result["episodes"] = materialize_segment_spans(text, result.get("episodes"))
 
         self.logger.info(
             "Segmentation complete",

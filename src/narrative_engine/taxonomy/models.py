@@ -7,13 +7,13 @@ with soft membership and taxonomy versioning for experimentation.
 from __future__ import annotations
 
 from datetime import datetime
-
-from narrative_engine.models import utcnow
 from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from narrative_engine.models import utcnow
 
 
 class TaxonomyType(str, Enum):

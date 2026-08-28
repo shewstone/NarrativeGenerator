@@ -6,7 +6,7 @@ for system health monitoring.
 
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 
 @dataclass
@@ -118,7 +118,7 @@ def get_metrics() -> MetricsCollector:
 
 
 @contextmanager
-def TimingContext(operation: str, metrics: Optional[MetricsCollector] = None):
+def TimingContext(operation: str, metrics: Optional[MetricsCollector] = None):  # noqa: N802
     """Context manager for timing operations.
 
     Example:

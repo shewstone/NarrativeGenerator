@@ -126,8 +126,8 @@ class ThesisGenerator:
         if mode == ThesisMode.ARC_LESS:
             uncertainties.insert(
                 0,
-                "Situation fits no known arc (unclassified): forecast rests on "
-                "structural similarity only, with no phase-completion statistics",
+                "Situation fits no known arc or supported change pattern "
+                "(unclassified): forecast rests on structural similarity only",
             )
 
         # Dedup disclosure (T6): if retrieval collapsed duplicate narrations
@@ -210,9 +210,10 @@ class ThesisGenerator:
         return ExtractionPipeline().client
 
     def _determine_mode(self, query_episode: Episode) -> ThesisMode:
-        """Arc-less iff the query situation carries no arc (failed tau_class
-        or was never classified) -- Sec 6.5.8."""
-        if query_episode.arc_type is None or query_episode.classification_state == ClassificationState.UNCLASSIFIED:
+        """Use structured mode when a neutral pattern or legacy arc survived."""
+        if (
+            query_episode.change_pattern is None and query_episode.arc_type is None
+        ) or query_episode.classification_state == ClassificationState.UNCLASSIFIED:
             return ThesisMode.ARC_LESS
         return ThesisMode.ARC_BASED
 
@@ -442,10 +443,16 @@ class ThesisGenerator:
 
     def _formulate_query(self, episode: Episode) -> str:
         """Formulate natural language query from episode."""
-        arc = episode.arc_type.value if episode.arc_type else "unknown"
-        phase = episode.arc_phase.value if episode.arc_phase else "unknown"
+        pattern = (
+            episode.change_pattern.value
+            if episode.change_pattern
+            else episode.arc_type.value
+            if episode.arc_type
+            else "unknown"
+        )
+        scale = episode.situation_scale.value if episode.situation_scale else "unknown scale"
 
-        return f"What is the likely outcome of '{episode.title}' ({arc}, {phase} phase)?"
+        return f"What is the likely outcome of '{episode.title}' ({pattern}, {scale})?"
 
     def _create_uncertain_thesis(
         self,

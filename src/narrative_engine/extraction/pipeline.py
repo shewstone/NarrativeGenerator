@@ -2,21 +2,28 @@
 
 from __future__ import annotations
 
+import re
 from contextlib import suppress
 from typing import Any, Dict, List, Optional
 
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from narrative_engine.extraction.client import ExtractionPipeline
+from narrative_engine.extraction.client import ExtractionPipeline, materialize_segment_spans
 from narrative_engine.extraction.config import ExtractionPipelineConfig
 from narrative_engine.models import (
     Actor,
     ArcPhase,
     ArcType,
+    ChangePattern,
     ClassificationState,
     Episode,
+    MechanismFamily,
     MechanismTag,
+    ScopeKind,
+    SituationConfiguration,
+    SituationDomain,
+    SituationScale,
     utcnow,
 )
 from narrative_engine.storage.repositories import (
@@ -24,6 +31,37 @@ from narrative_engine.storage.repositories import (
 )
 
 logger = structlog.get_logger()
+
+_LINK_STOP_WORDS = {
+    "about",
+    "after",
+    "again",
+    "against",
+    "also",
+    "before",
+    "being",
+    "between",
+    "during",
+    "episode",
+    "from",
+    "into",
+    "over",
+    "that",
+    "their",
+    "then",
+    "there",
+    "these",
+    "they",
+    "this",
+    "through",
+    "under",
+    "were",
+    "when",
+    "where",
+    "which",
+    "while",
+    "with",
+}
 
 
 class PipelineResult:
@@ -55,6 +93,12 @@ class ExtractionOrchestrator:
         self.pipeline = pipeline or ExtractionPipeline(config=self.config)
         self.logger = structlog.get_logger()
 
+    async def aclose(self) -> None:
+        """Release the LLM client's underlying HTTP connection pool."""
+        close = getattr(self.pipeline, "aclose", None)
+        if close is not None:
+            await close()
+
     async def process_text(
         self,
         text: str,
@@ -78,7 +122,12 @@ class ExtractionOrchestrator:
                 self.logger.info("Stage 1: Segmentation", chunk_id=source_chunk_id)
                 segmentation_result = await self.pipeline.segment(text)
 
-                segments = segmentation_result.get("episodes", [])
+                segments = materialize_segment_spans(text, segmentation_result.get("episodes"))
+                if segments and segments[0].get("segmentation_fallback"):
+                    self.logger.warning(
+                        "Segmentation spans could not be resolved; extracting chunk once",
+                        chunk_id=source_chunk_id,
+                    )
                 self.logger.info(f"Found {len(segments)} segments")
             else:
                 # If segmentation disabled, treat whole text as one segment
@@ -124,8 +173,13 @@ class ExtractionOrchestrator:
 
             if self.config.enable_linking and len(episodes) > 1:
                 self.logger.info("Stage 4: Linking")
+                total_pairs = len(episodes) * (len(episodes) - 1) // 2
+                candidate_pairs = 0
                 for index, source in enumerate(episodes):
-                    for target in episodes[index + 1 :]:
+                    for target_index, target in enumerate(episodes[index + 1 :], start=index + 1):
+                        if not self._is_link_candidate(source, target, target_index - index):
+                            continue
+                        candidate_pairs += 1
                         try:
                             await self._link_episode_pair(source, target, session)
                         except Exception as e:
@@ -136,6 +190,12 @@ class ExtractionOrchestrator:
                                 error=str(e),
                             )
                             errors.append(f"Linking {source.title} -> {target.title}: {str(e)}")
+                self.logger.info(
+                    "Linking prefilter complete",
+                    total_pairs=total_pairs,
+                    candidate_pairs=candidate_pairs,
+                    skipped_pairs=total_pairs - candidate_pairs,
+                )
 
         except Exception as e:
             self.logger.error("Pipeline failed", error=str(e), chunk_id=source_chunk_id)
@@ -176,6 +236,7 @@ class ExtractionOrchestrator:
             title=extraction_result.get("title", "Untitled"),
             summary=extraction_result.get("summary", ""),
             location=extraction_result.get("setting", {}).get("location"),
+            setting_description=extraction_result.get("setting", {}).get("description"),
             initiating_conditions=extraction_result.get("initiating_conditions", []),
             escalation_mechanics=extraction_result.get("escalation_mechanics", []),
             tension=extraction_result.get("tension"),
@@ -183,6 +244,8 @@ class ExtractionOrchestrator:
             consequences=extraction_result.get("consequences", []),
             extracted_from=[source_chunk_id],
         )
+
+        self._apply_focal_scope(episode, extraction_result.get("focal_scope"))
 
         # Parse dates
         setting = extraction_result.get("setting", {})
@@ -208,6 +271,57 @@ class ExtractionOrchestrator:
 
         return episode
 
+    def _apply_focal_scope(self, episode: Episode, focal_scope: Any) -> None:
+        """Record a source-backed focal subject and resolve known scopes.
+
+        New parties, factions, movements, and ideas retain their raw names;
+        only high-confidence exact aliases become canonical registry ids.
+        """
+        if not isinstance(focal_scope, dict):
+            return
+
+        name = focal_scope.get("name")
+        if isinstance(name, str) and name.strip():
+            episode.scope_name = name.strip()
+        parent_name = focal_scope.get("parent_name")
+        if isinstance(parent_name, str) and parent_name.strip():
+            episode.parent_scope_name = parent_name.strip()
+        evidence = focal_scope.get("evidence_quote")
+        if isinstance(evidence, str) and evidence.strip():
+            episode.scope_evidence = evidence.strip()
+        boundary_note = focal_scope.get("boundary_note")
+        if isinstance(boundary_note, str) and boundary_note.strip():
+            episode.scope_notes = boundary_note.strip()
+
+        kind = focal_scope.get("kind")
+        if isinstance(kind, str):
+            with suppress(ValueError):
+                episode.scope_kind = ScopeKind(kind)
+
+        confidence = self._bounded_confidence(focal_scope.get("confidence"))
+        episode.scope_confidence = confidence
+        if episode.scope_name and confidence is not None and confidence >= self.config.scope_confidence_floor:
+            from narrative_engine.scopes import get_registry, resolve_scope
+
+            episode.scope_id = resolve_scope(episode.scope_name)
+            canonical = get_registry().get(episode.scope_id) if episode.scope_id else None
+            if canonical is not None:
+                episode.scope_kind = canonical.kind
+                if canonical.parent_scope_id and not episode.parent_scope_name:
+                    parent = get_registry().get(canonical.parent_scope_id)
+                    episode.parent_scope_name = parent.name if parent else None
+
+    @staticmethod
+    def _bounded_confidence(value: Any, default: Optional[float] = None) -> Optional[float]:
+        """Parse a finite 0..1 score without trusting arbitrary LLM JSON."""
+        if isinstance(value, bool):
+            return default
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            return default
+        return parsed if 0.0 <= parsed <= 1.0 else default
+
     def _apply_normalized_dates(self, episode: Episode, setting: Dict[str, Any]) -> Episode:
         """Apply LLM-normalized partial ISO dates after deterministic validation."""
         import calendar
@@ -222,10 +336,7 @@ class ExtractionOrchestrator:
                 raise ValueError(f"invalid normalized date {value!r}")
             year = int(match.group(1))
             month = int(match.group(2) or (12 if end_bound else 1))
-            day = int(
-                match.group(3)
-                or (calendar.monthrange(year, month)[1] if end_bound else 1)
-            )
+            day = int(match.group(3) or (calendar.monthrange(year, month)[1] if end_bound else 1))
             return datetime(year, month, day, tzinfo=timezone.utc)
 
         try:
@@ -253,14 +364,53 @@ class ExtractionOrchestrator:
         return candidate
 
     async def _classify_episode(self, episode: Episode) -> None:
-        """Classify arc type and phase for an episode."""
+        """Classify a neutral situation pattern and optional legacy arc."""
         # First pass classification
         classification = await self.pipeline.classify(
             episode_summary=episode.summary,
             full_text=f"{episode.title}\n{episode.summary}",
         )
 
-        # Update episode with classification
+        # Primary, scale-neutral reading.
+        pattern_str = classification.get("change_pattern")
+        if pattern_str:
+            with suppress(ValueError):
+                episode.change_pattern = ChangePattern(pattern_str)
+        episode.pattern_confidence = self._bounded_confidence(classification.get("pattern_confidence"), 0.0) or 0.0
+        episode.pattern_rationale = classification.get("pattern_rationale")
+
+        scale_str = classification.get("situation_scale")
+        if scale_str:
+            with suppress(ValueError):
+                episode.situation_scale = SituationScale(scale_str)
+
+        episode.domains = []
+        for domain in classification.get("domains", []):
+            with suppress(ValueError):
+                parsed_domain = SituationDomain(domain)
+                if parsed_domain not in episode.domains:
+                    episode.domains.append(parsed_domain)
+
+        configuration = classification.get("configuration")
+        if isinstance(configuration, dict):
+            scores = {
+                key: value
+                for key, value in configuration.items()
+                if key in SituationConfiguration.model_fields
+                and isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                and -1.0 <= float(value) <= 1.0
+            }
+            episode.configuration = SituationConfiguration(**scores)
+
+        episode.mechanism_families = []
+        for family in classification.get("mechanism_families", []):
+            with suppress(ValueError):
+                parsed_family = MechanismFamily(family)
+                if parsed_family not in episode.mechanism_families:
+                    episode.mechanism_families.append(parsed_family)
+
+        # Optional legacy arc reading.
         arc_type_str = classification.get("arc_type")
         arc_phase_str = classification.get("arc_phase")
 
@@ -276,7 +426,7 @@ class ExtractionOrchestrator:
             except ValueError:
                 self.logger.warning(f"Unknown arc phase: {arc_phase_str}")
 
-        episode.phase_confidence = classification.get("phase_confidence", 0.0)
+        episode.phase_confidence = self._bounded_confidence(classification.get("phase_confidence"), 0.0) or 0.0
         episode.arc_rationale = classification.get("rationale")
 
         # Handle secondary arcs
@@ -294,9 +444,12 @@ class ExtractionOrchestrator:
         # Handle mechanism tags (design doc Sec 3.8): unrecognized tags are
         # skipped, not fatal -- the LLM occasionally drifts from the
         # vocabulary given in the prompt.
+        episode.mechanism_tags = []
         for tag in classification.get("mechanism_tags", []):
             with suppress(ValueError):
-                episode.mechanism_tags.append(MechanismTag(tag))
+                parsed_tag = MechanismTag(tag)
+                if parsed_tag not in episode.mechanism_tags:
+                    episode.mechanism_tags.append(parsed_tag)
 
         # tau_class floor (design doc Sec 6.2 stage 4): classification is
         # NOT a forced choice. If the best canonical arc doesn't clear the
@@ -309,7 +462,12 @@ class ExtractionOrchestrator:
         # search_by_embedding) and feed the discovery trigger (Sec 3.4)
         # when that lands.
         floor = self.config.classification_confidence_floor
-        if episode.arc_type is None or episode.phase_confidence < floor:
+        pattern_clears_floor = episode.change_pattern is not None and episode.pattern_confidence >= floor
+        if not pattern_clears_floor:
+            episode.change_pattern = None
+
+        arc_clears_floor = episode.arc_type is not None and episode.phase_confidence >= floor
+        if not arc_clears_floor:
             if episode.arc_type is not None:
                 self.logger.info(
                     "Episode failed tau_class floor; marking unclassified",
@@ -320,9 +478,11 @@ class ExtractionOrchestrator:
             episode.arc_type = None
             episode.arc_phase = None
             episode.secondary_arcs = []
-            episode.classification_state = ClassificationState.UNCLASSIFIED
-        else:
+
+        if pattern_clears_floor or arc_clears_floor:
             episode.classification_state = ClassificationState.CLASSIFIED
+        else:
+            episode.classification_state = ClassificationState.UNCLASSIFIED
 
         # TODO: Second-pass classification with nearest neighbors
         # Requires vector search for similar episodes. NOTE (Sec 6.2 stage
@@ -423,6 +583,81 @@ class ExtractionOrchestrator:
             )
         )
         await session.flush()
+
+    def _is_link_candidate(self, source: Episode, target: Episode, distance: int) -> bool:
+        """Cheap, conservative gate before pairwise LLM relationship checks."""
+        if distance <= self.config.linking_neighbor_window:
+            return True
+
+        source_actors = {self._normalize_link_value(actor.name) for actor in source.actors}
+        target_actors = {self._normalize_link_value(actor.name) for actor in target.actors}
+        if (source_actors - {""}) & (target_actors - {""}):
+            return True
+
+        source_location = self._normalize_link_value(source.location)
+        target_location = self._normalize_link_value(target.location)
+        if source_location and source_location == target_location:
+            return True
+
+        year_gap = self._episode_year_gap(source, target)
+        if year_gap is not None and year_gap <= self.config.linking_max_year_gap:
+            return True
+
+        source_terms = self._link_terms(self._episode_link_text(source))
+        target_terms = self._link_terms(self._episode_link_text(target))
+        if not source_terms or not target_terms:
+            return False
+        shared_terms = source_terms & target_terms
+        overlap = len(shared_terms) / min(len(source_terms), len(target_terms))
+        return len(shared_terms) >= 2 and overlap >= self.config.linking_min_lexical_overlap
+
+    @staticmethod
+    def _normalize_link_value(value: Optional[str]) -> str:
+        if not value:
+            return ""
+        return " ".join(re.findall(r"[a-z0-9]+", value.casefold()))
+
+    @staticmethod
+    def _link_terms(value: str) -> set[str]:
+        return {
+            term
+            for term in re.findall(r"[a-z0-9]+", value.casefold())
+            if len(term) >= 4 and term not in _LINK_STOP_WORDS
+        }
+
+    @staticmethod
+    def _episode_link_text(episode: Episode) -> str:
+        """Collect deterministic evidence fields used only by the cheap gate."""
+        return " ".join(
+            value
+            for value in (
+                episode.title,
+                episode.summary,
+                episode.tension,
+                episode.resolution,
+                *episode.initiating_conditions,
+                *episode.escalation_mechanics,
+                *episode.consequences,
+            )
+            if value
+        )
+
+    @staticmethod
+    def _episode_year_gap(source: Episode, target: Episode) -> Optional[float]:
+        """Return zero for overlapping intervals, otherwise years between them."""
+        if source.start_date is None or target.start_date is None:
+            return None
+        source_start = source.start_date.date()
+        source_end = (source.end_date or source.start_date).date()
+        target_start = target.start_date.date()
+        target_end = (target.end_date or target.start_date).date()
+        if source_end < target_start:
+            days = (target_start - source_end).days
+        elif target_end < source_start:
+            days = (source_start - target_end).days
+        else:
+            return 0.0
+        return days / 365.2425
 
     async def process_batch(
         self,

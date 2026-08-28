@@ -3,7 +3,7 @@
 Database operations, ORM models, and repository pattern.
 """
 
-from narrative_engine.storage.database import db_manager, Base
+from narrative_engine.storage.database import Base, db_manager
 from narrative_engine.storage.orm_models import (
     ActorORM,
     CycleORM,

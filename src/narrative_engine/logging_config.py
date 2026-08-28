@@ -7,7 +7,7 @@ Includes context propagation for tracing requests across async boundaries.
 import logging
 import sys
 from contextvars import ContextVar
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import structlog
 

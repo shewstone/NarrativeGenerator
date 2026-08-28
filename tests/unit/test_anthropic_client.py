@@ -29,7 +29,8 @@ def _response(
 
 def _client(response=None, config=None):
     fake_sdk = SimpleNamespace(
-        messages=SimpleNamespace(create=AsyncMock(return_value=response or _response()))
+        messages=SimpleNamespace(create=AsyncMock(return_value=response or _response())),
+        close=AsyncMock(),
     )
     client = AnthropicClient(
         config or LLMConfig(provider="anthropic", model="claude-sonnet-5"),
@@ -40,7 +41,9 @@ def _client(response=None, config=None):
 
 class TestRequestShape:
     @pytest.mark.asyncio
-    async def test_no_sampling_parameters_ever(self, ):
+    async def test_no_sampling_parameters_ever(
+        self,
+    ):
         """Current Claude models 400 on temperature/top_p — must never be sent,
         even when a caller passes temperature (classify passes 0.0)."""
         client, create = _client()
@@ -75,6 +78,14 @@ class TestRequestShape:
             "completion_tokens": 20,
             "total_tokens": 120,
         }
+
+    @pytest.mark.asyncio
+    async def test_close_releases_sdk_transport(self):
+        client, _ = _client()
+
+        await client.aclose()
+
+        client.client.close.assert_awaited_once()
 
 
 class TestStopReasons:
@@ -129,8 +140,14 @@ class TestProviderFactory:
 
 class TestDefaults:
     def test_no_retired_model_defaults(self, monkeypatch):
-        for var in ("NE_LLM_PROVIDER", "NE_LLM_MODEL", "NE_SEG_MODEL",
-                    "NE_EXTRACT_MODEL", "NE_CLASSIFY_MODEL", "NE_LINK_MODEL"):
+        for var in (
+            "NE_LLM_PROVIDER",
+            "NE_LLM_MODEL",
+            "NE_SEG_MODEL",
+            "NE_EXTRACT_MODEL",
+            "NE_CLASSIFY_MODEL",
+            "NE_LINK_MODEL",
+        ):
             monkeypatch.delenv(var, raising=False)
 
         llm = LLMConfig.from_env()

@@ -3,8 +3,6 @@
 import uuid
 from datetime import datetime
 
-import pytest
-
 from narrative_engine.composition.arc_instance import (
     ArcInstance,
     CompositionStatus,

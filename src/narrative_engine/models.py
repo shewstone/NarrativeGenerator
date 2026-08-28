@@ -3,6 +3,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from enum import Enum
+from typing import Any, Dict, List, Optional, Set
+from uuid import UUID, uuid4
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 def utcnow() -> datetime:
@@ -10,11 +15,6 @@ def utcnow() -> datetime:
     columns are timestamptz, and naive/aware mixing breaks round-trip
     equality (T3) besides being deprecated."""
     return datetime.now(timezone.utc)
-from enum import Enum
-from typing import Any, Dict, List, Literal, Optional, Set
-from uuid import UUID, uuid4
-
-from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ThesisConfidence(str, Enum):
@@ -100,6 +100,112 @@ class MechanismTag(str, Enum):
     REFORM_RESISTANCE = "reform_resistance"
 
 
+class ScopeKind(str, Enum):
+    """Kinds of focal scope, from a person to a whole system.
+
+    These describe *what the bounded subject is*, not how important it is.
+    In particular, parties and factions are first-class scopes rather than
+    being flattened into the polity that contains them.
+    """
+
+    PERSON = "person"
+    DYAD = "dyad"
+    GROUP = "group"
+    FACTION = "faction"
+    IDEA = "idea"
+    DISCOURSE = "discourse"
+    MOVEMENT = "movement"
+    ORGANIZATION = "organization"
+    PARTY = "party"
+    INSTITUTION = "institution"
+    POLITY = "polity"
+    CIVILIZATION = "civilization"
+    REGION = "region"
+    SYSTEM = "system"
+
+
+class SituationScale(str, Enum):
+    """Analytical scale of a situation, independent of subject matter."""
+
+    PERSONAL = "personal"
+    INTERPERSONAL = "interpersonal"
+    GROUP = "group"
+    ORGANIZATION = "organization"
+    INSTITUTION = "institution"
+    POLITY = "polity"
+    CIVILIZATION = "civilization"
+    SYSTEM = "system"
+
+
+class SituationDomain(str, Enum):
+    """Facets through which the same change can be observed."""
+
+    PSYCHOLOGICAL = "psychological"
+    RELATIONAL = "relational"
+    ORGANIZATIONAL = "organizational"
+    POLITICAL = "political"
+    ECONOMIC = "economic"
+    CULTURAL = "cultural"
+    TECHNOLOGICAL = "technological"
+    ECOLOGICAL = "ecological"
+    MILITARY = "military"
+    RELIGIOUS = "religious"
+
+
+class ChangePattern(str, Enum):
+    """Scale-neutral modes of change.
+
+    Unlike the legacy ``ArcType`` labels, these do not assume that the
+    subject is a market, state, civilization, or literary protagonist.
+    """
+
+    EMERGENCE_AND_GATHERING = "emergence_and_gathering"
+    EXPANSION_AND_CONSOLIDATION = "expansion_and_consolidation"
+    SATURATION_AND_OVERREACH = "saturation_and_overreach"
+    TENSION_AND_CONTESTATION = "tension_and_contestation"
+    FRAGMENTATION_AND_RELEASE = "fragmentation_and_release"
+    RETREAT_AND_PRESERVATION = "retreat_and_preservation"
+    TURNING_AND_REORIENTATION = "turning_and_reorientation"
+    RENEWAL_AND_INTEGRATION = "renewal_and_integration"
+    SUCCESSION_AND_TRANSFER = "succession_and_transfer"
+
+
+class MechanismFamily(str, Enum):
+    """Broad causal families that travel across domains and scales."""
+
+    AMPLIFICATION_FEEDBACK = "amplification_feedback"
+    RESOURCE_STRAIN = "resource_strain"
+    LEGITIMACY_EROSION = "legitimacy_erosion"
+    COORDINATION_FAILURE = "coordination_failure"
+    BOUNDARY_PRESSURE = "boundary_pressure"
+    SUCCESSION_DYNAMICS = "succession_dynamics"
+    INSTITUTIONAL_LOCK_IN = "institutional_lock_in"
+    ADAPTATION_LEARNING = "adaptation_learning"
+    CONTAGION_DIFFUSION = "contagion_diffusion"
+    COOPERATION_ALIGNMENT = "cooperation_alignment"
+    COMPETITION_DISPLACEMENT = "competition_displacement"
+    MEMORY_LOSS = "memory_loss"
+
+
+class SituationConfiguration(BaseModel):
+    """Six continuous axes describing a situation without domain labels.
+
+    Values run from -1 to +1; ``None`` means the source does not support an
+    estimate. Positive poles are abundant capacity, integrated cohesion,
+    acute pressure, accepted legitimacy, flexible adaptation, and
+    concentrated agency respectively.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    capacity: Optional[float] = Field(default=None, ge=-1.0, le=1.0)
+    cohesion: Optional[float] = Field(default=None, ge=-1.0, le=1.0)
+    pressure: Optional[float] = Field(default=None, ge=-1.0, le=1.0)
+    legitimacy: Optional[float] = Field(default=None, ge=-1.0, le=1.0)
+    adaptability: Optional[float] = Field(default=None, ge=-1.0, le=1.0)
+    agency: Optional[float] = Field(default=None, ge=-1.0, le=1.0)
+
+
 class ClassificationState(str, Enum):
     """Whether an episode cleared the classification confidence floor.
 
@@ -140,7 +246,7 @@ class CycleScale(str, Enum):
 
 class EdgeKind(str, Enum):
     """Kinds of relationships between episodes.
-    
+
     CORRECTION: Separate from link_status (attested vs inferred).
     Edge kind is orthogonal to evidentiary status.
     """
@@ -154,7 +260,7 @@ class EdgeKind(str, Enum):
 
 class LinkStatus(str, Enum):
     """Evidentiary status of a link.
-    
+
     Invariant: CAUSES edges must be ATTESTED (no inferred causal claims).
     """
 
@@ -164,7 +270,7 @@ class LinkStatus(str, Enum):
 
 class ReviewStatus(str, Enum):
     """Review state for inferred links.
-    
+
     Inferred links above threshold go to human review queue.
     """
 
@@ -311,8 +417,7 @@ class SourceDocument(BaseModel):
 
 
 class Scope(BaseModel):
-    """A polity/civilization/region/system/dyad that cycle trees and
-    episodes belong to (design doc Sec 4).
+    """A bounded subject that cycle trees and episodes belong to.
 
     The registry of scopes is versioned data, not ontology (Sec 9): whether
     "the West" is one scope or "China" spans dynastic breaks are hypotheses
@@ -323,9 +428,9 @@ class Scope(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     id: str  # slug: "us", "china", "intl_system"
-    kind: Literal["polity", "civilization", "region", "system", "dyad"]
+    kind: ScopeKind
     name: str
-    parent_scope_id: Optional[str] = None  # polities nest under civilizations
+    parent_scope_id: Optional[str] = None  # e.g. faction -> party -> polity
     aliases: List[str] = Field(default_factory=list)
     notes: Optional[str] = None  # where the boundary is contested, say so
 
@@ -383,6 +488,16 @@ class Episode(BaseModel):
     location: Optional[str] = None
     setting_description: Optional[str] = None
     scope_id: Optional[str] = None  # polity/institution scope, e.g., "us_national"
+    # Raw focal-scope claims let extraction represent a previously unseen
+    # party, faction, team, relationship, or person without inventing a
+    # canonical registry id. ``scope_id`` is populated only when exact alias
+    # resolution succeeds; composition safely falls back to scope_name.
+    scope_name: Optional[str] = None
+    scope_kind: Optional[ScopeKind] = None
+    parent_scope_name: Optional[str] = None
+    scope_confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    scope_evidence: Optional[str] = None
+    scope_notes: Optional[str] = None
 
     # Narrative structure
     actors: List[Actor] = Field(default_factory=list)
@@ -396,6 +511,16 @@ class Episode(BaseModel):
     # the mechanisms at work in this episode, assigned during classification
     # alongside arc_type/arc_phase (same analytical-judgment stage).
     mechanism_tags: List[MechanismTag] = Field(default_factory=list)
+
+    # Scale-neutral situation reading. This is the primary ontology; the
+    # legacy arc fields below remain for compatibility and specialised views.
+    change_pattern: Optional[ChangePattern] = None
+    pattern_confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    pattern_rationale: Optional[str] = None
+    situation_scale: Optional[SituationScale] = None
+    domains: List[SituationDomain] = Field(default_factory=list)
+    configuration: SituationConfiguration = Field(default_factory=SituationConfiguration)
+    mechanism_families: List[MechanismFamily] = Field(default_factory=list)
 
     # Arc classification. arc_type/arc_phase are None when the episode is
     # UNCLASSIFIED (no forced choice -- see ClassificationState); confidence

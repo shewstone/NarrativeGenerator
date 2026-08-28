@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import suppress
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence
 from uuid import UUID
 
 import structlog
@@ -18,7 +18,9 @@ from narrative_engine.models import (
     CycleScale,
     EdgeKind,
     Episode,
+    MechanismFamily,
     MechanismTag,
+    SituationDomain,
 )
 from narrative_engine.retrieval.embeddings import EmbeddingGenerator
 from narrative_engine.storage.repositories import EpisodeRepository
@@ -89,18 +91,15 @@ class AnalogRetrievalEngine:
             k=k,
         )
 
-        # Arc-less fallback (Sec 6.5.8): if the query situation itself has no
-        # arc (failed tau_class), there is no phase and no phase-completion
-        # forecast -- retrieval degrades to bare structural nearest-neighbor
-        # matching. Unclassified corpus episodes are admissible analogs in
-        # this mode (nothing conditions on arc labels); in arc-based mode
-        # they are excluded from the analog base entirely.
+        # Pattern-less fallback: the neutral change pattern is primary. A
+        # query needs bare vector retrieval only when neither it nor the
+        # optional legacy arc produced a supported structural reading.
         arc_less = (
-            query_episode.arc_type is None or query_episode.classification_state == ClassificationState.UNCLASSIFIED
-        )
+            query_episode.change_pattern is None and query_episode.arc_type is None
+        ) or query_episode.classification_state == ClassificationState.UNCLASSIFIED
         if arc_less:
             self.logger.info(
-                "Query is unclassified; retrieval degrading to arc-less mode",
+                "Query is unclassified; retrieval degrading to pattern-less mode",
                 query_title=query_episode.title,
             )
 
@@ -119,9 +118,10 @@ class AnalogRetrievalEngine:
 
         self.logger.info(f"Vector search returned {len(candidates)} candidates")
 
-        # Step 3: Score and rank candidates
-        scored_analogs: List[RetrievedAnalog] = []
-
+        # Step 3: Filter candidates before loading cycle context. Cycle
+        # memberships are fetched once for the whole candidate set instead
+        # of issuing one query per candidate.
+        eligible_candidates = []
         for episode, distance in candidates:
             # search_by_embedding returns cosine DISTANCE (0 = identical);
             # convert to similarity before thresholding -- filtering the raw
@@ -137,12 +137,28 @@ class AnalogRetrievalEngine:
             if episode.id == query_episode.id:
                 continue
 
+            eligible_candidates.append((episode, vector_sim))
+
+        cycles_by_episode = await self._load_cycle_contexts(
+            [query_episode.id, *(episode.id for episode, _ in eligible_candidates)],
+            session,
+        )
+        query_cycles = cycles_by_episode.get(query_episode.id, [])
+
+        scored_analogs: List[RetrievedAnalog] = []
+        for episode, vector_sim in eligible_candidates:
+            cycle_score = self._score_cycle_contexts(
+                query_cycles,
+                cycles_by_episode.get(episode.id, []),
+            )
+
             analog = await self._score_analog(
                 query_episode=query_episode,
                 candidate=episode,
                 vector_similarity=vector_sim,
                 session=session,
                 arc_less=arc_less,
+                cycle_context_score=cycle_score,
             )
 
             scored_analogs.append(analog)
@@ -245,16 +261,18 @@ class AnalogRetrievalEngine:
         concrete data. Surface embeddings only (identity signal, Sec 3.3a);
         near-miss decoys (1907 panic vs 1929 crash: same scope, same arc)
         are separated by the time-span overlap requirement."""
-        from narrative_engine.scopes import resolve_scope
+        from narrative_engine.scopes import scope_partition_key
 
-        if not a.scope_id or not b.scope_id:
+        scope_a = scope_partition_key(a.scope_id, a.scope_name)
+        scope_b = scope_partition_key(b.scope_id, b.scope_name)
+        if not scope_a or not scope_b:
             return False
-        scope_a = resolve_scope(a.scope_id) or a.scope_id
-        scope_b = resolve_scope(b.scope_id) or b.scope_id
         if scope_a != scope_b:
             return False
 
-        if not a.arc_type or not b.arc_type or a.arc_type != b.arc_type:
+        same_supported_pattern = bool(a.change_pattern and b.change_pattern and a.change_pattern == b.change_pattern)
+        same_legacy_arc = bool(a.arc_type and b.arc_type and a.arc_type == b.arc_type)
+        if not (same_supported_pattern or same_legacy_arc):
             return False
 
         if not (a.start_date and a.end_date and b.start_date and b.end_date):
@@ -276,6 +294,7 @@ class AnalogRetrievalEngine:
         vector_similarity: float,
         session: AsyncSession,
         arc_less: bool = False,
+        cycle_context_score: Optional[float] = None,
     ) -> RetrievedAnalog:
         """Score a candidate analog across multiple dimensions.
 
@@ -286,32 +305,56 @@ class AnalogRetrievalEngine:
         transparency but carry no weight.
         """
 
-        # Arc type match
-        arc_match = self._compute_arc_match(
-            query_episode.arc_type,
-            candidate.arc_type,
-        )
+        # Primary change-pattern match, with legacy arc fallback for records
+        # extracted before the neutral ontology existed.
+        if query_episode.change_pattern:
+            arc_match = 1.0 if query_episode.change_pattern == candidate.change_pattern else 0.0
+        else:
+            arc_match = self._compute_arc_match(
+                query_episode.arc_type,
+                candidate.arc_type,
+            )
 
         # Phase compatibility (for forecasting utility)
-        phase_compat = self._compute_phase_compatibility(
-            query_episode.arc_phase,
-            candidate.arc_phase,
-            query_episode.arc_type,
-            candidate.arc_type,
-        )
+        if query_episode.change_pattern:
+            scale_match = (
+                1.0
+                if query_episode.situation_scale and query_episode.situation_scale == candidate.situation_scale
+                else 0.5
+            )
+            domain_match = self._compute_mechanism_overlap(
+                query_episode.domains,
+                candidate.domains,
+            )
+            phase_compat = 0.6 * scale_match + 0.4 * domain_match
+        else:
+            phase_compat = self._compute_phase_compatibility(
+                query_episode.arc_phase,
+                candidate.arc_phase,
+                query_episode.arc_type,
+                candidate.arc_type,
+            )
 
         # Cycle context (episodes in same cycle scale are more comparable)
-        cycle_score = await self._compute_cycle_context_score(
-            query_episode,
-            candidate,
-            session,
-        )
+        cycle_score = cycle_context_score
+        if cycle_score is None:
+            cycle_score = await self._compute_cycle_context_score(
+                query_episode,
+                candidate,
+                session,
+            )
 
         # Mechanism overlap (design doc Sec 3.8): shared structural drivers
-        mechanism_score = self._compute_mechanism_overlap(
-            query_episode.mechanism_tags,
-            candidate.mechanism_tags,
-        )
+        if query_episode.mechanism_families:
+            mechanism_score = self._compute_mechanism_overlap(
+                query_episode.mechanism_families,
+                candidate.mechanism_families,
+            )
+        else:
+            mechanism_score = self._compute_mechanism_overlap(
+                query_episode.mechanism_tags,
+                candidate.mechanism_tags,
+            )
 
         if arc_less:
             # Bare structural nearest-neighbor with cycle-state as soft
@@ -331,14 +374,22 @@ class AnalogRetrievalEngine:
         # Generate reasoning
         reasoning_parts = []
         if arc_less:
-            reasoning_parts.append("Arc-less structural match (query unclassified)")
-        if not arc_less and arc_match > 0.8 and candidate.arc_type:
+            reasoning_parts.append("Pattern-less structural match (query unclassified)")
+        if not arc_less and arc_match > 0.8 and candidate.change_pattern:
+            reasoning_parts.append(f"Same change pattern: {candidate.change_pattern.value}")
+        elif not arc_less and arc_match > 0.8 and candidate.arc_type:
             reasoning_parts.append(f"Same arc type: {candidate.arc_type.value}")
-        if not arc_less and phase_compat > 0.8 and candidate.arc_phase:
+        if not arc_less and query_episode.change_pattern and phase_compat > 0.8 and candidate.situation_scale:
+            reasoning_parts.append(f"Comparable scale/domains: {candidate.situation_scale.value}")
+        elif not arc_less and phase_compat > 0.8 and candidate.arc_phase:
             reasoning_parts.append(f"Similar phase: {candidate.arc_phase.value}")
         if vector_similarity > 0.85:
             reasoning_parts.append("High semantic similarity")
-        shared_mechanisms = set(query_episode.mechanism_tags) & set(candidate.mechanism_tags)
+        shared_mechanisms: set[MechanismFamily | MechanismTag]
+        if query_episode.mechanism_families:
+            shared_mechanisms = set(query_episode.mechanism_families) & set(candidate.mechanism_families)
+        else:
+            shared_mechanisms = set(query_episode.mechanism_tags) & set(candidate.mechanism_tags)
         if shared_mechanisms:
             reasoning_parts.append(f"Shared mechanisms: {', '.join(sorted(m.value for m in shared_mechanisms))}")
 
@@ -391,8 +442,8 @@ class AnalogRetrievalEngine:
 
     def _compute_mechanism_overlap(
         self,
-        query_tags: List[MechanismTag],
-        candidate_tags: List[MechanismTag],
+        query_tags: Sequence[MechanismTag | MechanismFamily | SituationDomain],
+        candidate_tags: Sequence[MechanismTag | MechanismFamily | SituationDomain],
     ) -> float:
         """Score mechanism-tag overlap (design doc Sec 3.8) via Jaccard
         similarity. Neutral if either side has no tags -- most episodes
@@ -466,7 +517,15 @@ class AnalogRetrievalEngine:
             with suppress(ValueError):
                 phases.append(ArcPhase(name))
 
-        return phases
+        if phases:
+            return phases
+        return [
+            ArcPhase.SETUP,
+            ArcPhase.RISING_ACTION,
+            ArcPhase.CLIMAX,
+            ArcPhase.FALLING_ACTION,
+            ArcPhase.RESOLUTION,
+        ]
 
     def _categorize_phase(self, phase: ArcPhase) -> str:
         """Categorize phase into early/middle/late."""
@@ -504,6 +563,23 @@ class AnalogRetrievalEngine:
         episode. Exact shared membership is strongest; otherwise score the
         best-aligned pair by scope, scale, and phase.
         """
+        cycles_by_episode = await self._load_cycle_contexts([query.id, candidate.id], session)
+        return self._score_cycle_contexts(
+            cycles_by_episode.get(query.id, []),
+            cycles_by_episode.get(candidate.id, []),
+        )
+
+    async def _load_cycle_contexts(
+        self,
+        episode_ids: List[UUID],
+        session: AsyncSession,
+    ) -> Dict[UUID, list]:
+        """Load cycle memberships for a candidate batch in one query."""
+        unique_ids = list(dict.fromkeys(episode_ids))
+        by_episode = {episode_id: [] for episode_id in unique_ids}
+        if not unique_ids:
+            return by_episode
+
         from narrative_engine.storage.orm_models import (
             CycleMembershipORM,
             CycleORM,
@@ -512,14 +588,14 @@ class AnalogRetrievalEngine:
         result = await session.execute(
             select(CycleORM, CycleMembershipORM.episode_id)
             .join(CycleMembershipORM, CycleMembershipORM.cycle_id == CycleORM.id)
-            .where(CycleMembershipORM.episode_id.in_([query.id, candidate.id]))
+            .where(CycleMembershipORM.episode_id.in_(unique_ids))
         )
-        by_episode = {query.id: [], candidate.id: []}
         for cycle, episode_id in result.all():
             by_episode[episode_id].append(cycle)
+        return by_episode
 
-        query_cycles = by_episode[query.id]
-        candidate_cycles = by_episode[candidate.id]
+    def _score_cycle_contexts(self, query_cycles: list, candidate_cycles: list) -> float:
+        """Score two preloaded cycle collections."""
         if not query_cycles or not candidate_cycles:
             return 0.5
 

@@ -9,8 +9,6 @@ guarantee: no identity marker from the source record survives the render.
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 
-import pytest
-
 from narrative_engine.extraction.pipeline import ExtractionOrchestrator
 from narrative_engine.extraction.roles import (
     UNRESOLVED_ACTOR_TOKEN,
@@ -76,9 +74,6 @@ class TestRoleTokensOnly:
 
     def test_unresolved_actors_share_one_token(self):
         episode = _episode_1907()
-        for actor in episode.actors:
-            # Rebuild with all-unresolved actors
-            pass
         episode.actors = [
             Actor(name="A", role="x"),
             Actor(name="B", role="y"),

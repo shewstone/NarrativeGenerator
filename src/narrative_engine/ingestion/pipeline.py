@@ -14,6 +14,7 @@ from narrative_engine.ingestion.models import (
     ParsedDocument,
 )
 from narrative_engine.ingestion.parsers import get_parser
+
 # LogTimer comes from logging_config: the observability module exports a
 # @contextmanager of the same name with an incompatible (operation-first)
 # signature, and the calls below use the class form (logger, operation, **ctx).
@@ -151,6 +152,9 @@ class IngestionPipeline:
 
     def _output(self, chunks: List[Chunk], output_dir: Path) -> List[Path]:
         """Write chunks to output files."""
+        if not chunks:
+            return []
+
         output_dir.mkdir(parents=True, exist_ok=True)
         output_files = []
 

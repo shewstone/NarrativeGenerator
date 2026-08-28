@@ -20,6 +20,7 @@ from narrative_engine.storage.repositories import (
 from narrative_engine.watcher import (
     DocumentProcessor,
     WatcherConfig,
+    _hash_file,
     llm_configured,
     scan_once,
 )
@@ -32,6 +33,22 @@ UTC = timezone.utc
 def _isolate_llm_credentials(monkeypatch):
     for name in ("NE_LLM_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"):
         monkeypatch.delenv(name, raising=False)
+
+
+def test_hash_file_streams_without_path_read_bytes(tmp_path, monkeypatch):
+    path = tmp_path / "large.bin"
+    content = b"0123456789" * 1000
+    path.write_bytes(content)
+
+    def fail_read_bytes(self):
+        raise AssertionError("whole-file read should not be used")
+
+    monkeypatch.setattr(Path, "read_bytes", fail_read_bytes)
+
+    digest, size_bytes = _hash_file(path)
+
+    assert digest == hashlib.sha256(content).hexdigest()
+    assert size_bytes == len(content)
 
 
 class TestSourceDocumentRoundTrip:
@@ -176,9 +193,7 @@ class TestSettleGuard:
 
 class TestFailureIsolation:
     @pytest.mark.asyncio
-    async def test_unparseable_file_fails_visibly_and_loop_continues(
-        self, db_session, tmp_path
-    ):
+    async def test_unparseable_file_fails_visibly_and_loop_continues(self, db_session, tmp_path):
         processor = DocumentProcessor(extractor=None)
         _write(tmp_path, "image.xyz", b"\x89PNG not a text format")
         _write(tmp_path, "readable.txt", b"a perfectly fine text file")
@@ -379,9 +394,7 @@ class TestChunkProgress:
         assert extractor.calls == 1
 
     @pytest.mark.asyncio
-    async def test_retry_after_composition_failure_does_not_reextract(
-        self, db_session, tmp_path, monkeypatch
-    ):
+    async def test_retry_after_composition_failure_does_not_reextract(self, db_session, tmp_path, monkeypatch):
         from narrative_engine.composition.pipeline import CompositionPipeline
 
         class ClassifiedExtractor(FakeExtractor):
@@ -460,9 +473,7 @@ class TestChunkProgress:
 
 class TestExtractionGating:
     @pytest.mark.asyncio
-    async def test_no_llm_key_completes_with_extraction_pending(
-        self, db_session, tmp_path, monkeypatch
-    ):
+    async def test_no_llm_key_completes_with_extraction_pending(self, db_session, tmp_path, monkeypatch):
         for var in ("NE_LLM_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"):
             monkeypatch.delenv(var, raising=False)
         assert not llm_configured()
