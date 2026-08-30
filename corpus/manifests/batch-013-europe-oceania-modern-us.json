@@ -1,0 +1,52 @@
+[
+  {
+    "title": "History of Australia and New Zealand from 1606 to 1890",
+    "coverage": "European exploration, Australian colonial formation, convict society, inland expansion, gold rushes, responsible government, Maori political organization, colonization, land conflict, and representative institutions through 1890",
+    "source_page": "https://www.gutenberg.org/ebooks/25828",
+    "published_at": "1894-12-31",
+    "include_chunk_ranges": [[0, 27]],
+    "chunks_preselected": true,
+    "url": "https://www.gutenberg.org/cache/epub/25828/pg25828.txt",
+    "filename": "pg25828-australia-new-zealand-history.txt"
+  },
+  {
+    "title": "Area Handbook for Oceania",
+    "coverage": "Pacific colonial contact, wartime occupation, Indigenous social and religious systems, decolonization and self-government across Melanesia and Polynesia, regional institutions, and the historical development of American-administered Micronesia through 1970",
+    "source_page": "https://eric.ed.gov/?id=ED056946",
+    "published_at": "1970-07-09",
+    "include_chunk_ranges": [[0, 8], [21, 29], [35, 50], [79, 84]],
+    "chunks_preselected": true,
+    "url": "https://files.eric.ed.gov/fulltext/ED056946.pdf",
+    "filename": "usgov-oceania-area-handbook-1970.pdf"
+  },
+  {
+    "title": "France and U.S.-French Relations: In Brief",
+    "coverage": "The collapse of France's traditional governing parties, Macron and En Marche, National Front growth, labor opposition, terrorism, and institutional pressures through 2018",
+    "source_page": "https://www.congress.gov/crs-product/R45167",
+    "published_at": "2018-04-19",
+    "include_chunk_ranges": [[0, 2]],
+    "chunks_preselected": true,
+    "url": "https://www.congress.gov/crs_external_products/R/PDF/R45167/R45167.5.pdf",
+    "filename": "crs-modern-france-2018.pdf"
+  },
+  {
+    "title": "The European Union: Questions and Answers",
+    "coverage": "Postwar European integration, enlargement, EU institutions, the eurozone, migration, Brexit, democratic backsliding, nationalist and Eurosceptic party growth, and the impact of Russia's war against Ukraine through 2024",
+    "source_page": "https://www.congress.gov/crs-product/RS21372",
+    "published_at": "2024-01-26",
+    "include_chunk_ranges": [[0, 5]],
+    "chunks_preselected": true,
+    "url": "https://www.congress.gov/crs_external_products/RS/PDF/RS21372/RS21372.64.pdf",
+    "filename": "crs-european-union-2024.pdf"
+  },
+  {
+    "title": "Executive Summary of the Final Report of the Select Committee to Investigate the January 6th Attack",
+    "coverage": "The post-2020 election-denial coalition, Stop the Steal mobilization, pressure on public institutions, militia participation, the January 6 attack, and fractures within the Republican governing coalition",
+    "source_page": "https://www.govinfo.gov/app/details/GPO-J6-REPORT/context",
+    "published_at": "2022-12-22",
+    "include_chunk_ranges": [[0, 18]],
+    "chunks_preselected": true,
+    "url": "https://www.govinfo.gov/content/pkg/GPO-J6-REPORT/pdf/GPO-J6-REPORT-1-6.pdf",
+    "filename": "govinfo-january-6-executive-summary-2022.pdf"
+  }
+]

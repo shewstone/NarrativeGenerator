@@ -482,6 +482,10 @@ class Episode(BaseModel):
     # Temporal
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
+    # Signed historical years preserve dates outside Python/PostgreSQL's CE
+    # datetime range. Negative values mean BCE; year zero is not used.
+    start_year: Optional[int] = None
+    end_year: Optional[int] = None
     date_precision: str = "year"  # year, month, day
 
     # Setting and scope (CORRECTION: scope is primary partition key)
@@ -537,6 +541,10 @@ class Episode(BaseModel):
     # Provenance
     source_passages: List[SourcePassage] = Field(default_factory=list)
     extracted_from: List[str] = Field(default_factory=list)  # chunk IDs
+    # When the source itself became available. Historical backtests must not
+    # retrieve an episode extracted from a work published after their cutoff,
+    # even when the episode describes an earlier event.
+    source_published_at: Optional[datetime] = None
 
     # Metadata
     created_at: datetime = Field(default_factory=utcnow)

@@ -15,9 +15,11 @@ from narrative_engine.models import ScopeKind, SituationDomain, SituationScale
 
 # Prompt versions for tracking
 PROMPT_VERSIONS = {
-    "segmentation": "1.1.0",  # 1.1.0: source-backed character spans
-    "extraction": "2.0.0",  # focal hierarchical scope + scale-neutral language
+    "segmentation": "1.3.0",  # 1.3.0: bounded, source-backed, cost-capped events
+    "extraction": "2.1.0",  # durable focal scope from bounded neighboring context
+    "scope": "1.0.0",  # constrained selection from registry candidates
     "classification": "2.0.0",  # configuration/change-pattern ontology
+    "reconciliation": "1.0.0",  # document-level chronological phase review
     "linking": "1.0.0",
 }
 
@@ -43,21 +45,24 @@ An **episode** is a self-contained historical situation with:
 - Specific actors and time period
 
 **Instructions:**
-1. Identify all distinct episodes in the text
+1. Identify the historically meaningful episodes in the text. Return at most
+   8. Combine incidental anecdotes or repeated descriptions into the nearest
+   causally coherent episode; do not treat the entire chapter as one episode
+   merely because it has one heading.
 2. For each episode, provide:
    - Episode number (1, 2, 3...)
    - One-line summary (20 words max)
-   - Beginning state (what kicked it off)
-   - Key tension (what's at stake)
+   - Beginning state (what kicked it off, 20 words max)
+   - Key tension (what's at stake, 20 words max)
    - Current status (resolved or ongoing)
    - start_char: zero-based character offset where the episode begins
    - end_char: zero-based, end-exclusive character offset where it ends
-   - start_quote: an exact verbatim quote from the beginning of the span
-   - end_quote: an exact verbatim quote from the end of the span
+   - start_quote: an exact 4-12 word verbatim quote from the beginning of the span
+   - end_quote: an exact 4-12 word verbatim quote from the end of the span
 
 Character offsets refer only to the text between the delimiters below.
-Spans must be ordered, non-overlapping, and copied from the source. Never
-paraphrase the boundary quotes.
+Spans must be ordered, non-overlapping, and copied from the source. Prefer
+boundaries at paragraph breaks. Never paraphrase the boundary quotes.
 
 **Output format:** Return JSON with this structure:
 {{"episodes": [{{"number": 1, "summary": "...", "beginning": "...", "tension": "...", "status": "resolved|ongoing", "start_char": 0, "end_char": 123, "start_quote": "exact source text", "end_quote": "exact source text"}}]}}
@@ -72,7 +77,11 @@ If no distinct episodes found, return empty array.
 Return only valid JSON."""
 
 
-def get_extraction_prompt(segment_text: str, segment_summary: str) -> str:
+def get_extraction_prompt(
+    segment_text: str,
+    segment_summary: str,
+    narrative_context: str | None = None,
+) -> str:
     """Prompt for extracting structured data from an episode.
 
     Stage 2: Pull actors, conditions, mechanics, resolution from segment.
@@ -81,6 +90,13 @@ def get_extraction_prompt(segment_text: str, segment_summary: str) -> str:
     return f"""You are extracting structured data from a narrative segment. The subject may be a person, relationship, group, organization, polity, civilization, or system. Extract all relevant information without privileging finance or state-level events.
 
 **Context:** This segment describes: {segment_summary}
+
+**Nearby event summaries from the same source chunk:**
+{narrative_context or 'No additional context supplied.'}
+
+Use the nearby summaries only to identify the durable trajectory that this
+episode updates. Every factual field and evidence quote must still be grounded
+in the segment text below; do not import facts from a neighboring event.
 
 **Instructions:** Extract the following fields and return as JSON:
 
@@ -104,8 +120,10 @@ def get_extraction_prompt(segment_text: str, segment_summary: str) -> str:
 4. **setting** (object):
    - location: Where it took place
    - time_period_label: Preserve the source's original wording for when it occurred
-   - start_date: Normalize to "YYYY", "YYYY-MM", or "YYYY-MM-DD"; null when
-     legendary, disputed, or not safely resolvable
+   - start_date: Normalize CE dates to "YYYY", "YYYY-MM", or "YYYY-MM-DD".
+     Represent BCE years with a leading minus (for example, "-1274" means
+     1274 BCE); there is no year zero. Use null when legendary, disputed, or
+     not safely resolvable
    - end_date: Same normalized formats, or null for a single date/unknown end
    - date_precision: "day", "month", "year", "range", or "unknown"
    - date_basis: "explicit", "inferred", "legendary", or "unknown"
@@ -122,11 +140,23 @@ def get_extraction_prompt(segment_text: str, segment_summary: str) -> str:
 
 9. **consequences** (array): What happened afterward? Immediate and downstream effects (3-5 bullet points)
 
-10. **focal_scope** (object): The bounded subject whose trajectory changes in
-    this episode. Prefer the most local causally central subject, even when it
-    is a faction inside a party, a party inside a polity, or an idea/discourse
-    spreading through a society.
-   - name: Exact name used by the source, or null
+10. **focal_scope** (object): The durable bounded subject whose formation,
+    growth, contestation, decline, or renewal this episode is evidence about.
+    Ask: "whose longer trajectory would this event be one data point in?"
+    Prefer continuity across nearby events over whichever actor performs the
+    immediate action. An office-holder, temporary assembly, law, battle, or
+    crowd normally belongs in actors/title, not focal_scope, unless its own
+    durable trajectory is genuinely the subject. Choose a subgroup, party,
+    movement, or family of ideas when the text tracks that subgroup's path;
+    do not default to its parent polity. When an event could describe both a
+    challenger's rise and an incumbent's decline, follow the trajectory
+    emphasized across nearby summaries and record the ambiguity in
+    boundary_note rather than switching among transient actors.
+   - name: The conventional full name supported by the source, or null. Prefer
+     a durable subject that can recur across episodes; never use an event title
+     or ad-hoc description as a scope name. Keep naming consistent (for
+     example, "Julius Caesar", not alternating between "Caesar" and "Julius
+     Caesar").
    - kind: One of {scope_kinds}, or null
    - parent_name: Nearest containing group, organization, polity, or other
      larger scope when supported (for example faction -> party -> polity)
@@ -141,6 +171,36 @@ def get_extraction_prompt(segment_text: str, segment_summary: str) -> str:
 ---
 
 Return only valid JSON matching this schema. Use null for unknown fields."""
+
+
+def get_scope_canonicalization_prompt(
+    raw_name: str,
+    raw_kind: str | None,
+    parent_name: str | None,
+    evidence_quote: str | None,
+    candidates: List[Dict],
+) -> str:
+    """Constrain entity normalization to retrieved registry candidates."""
+    return f"""You are resolving one source-backed historical subject against a versioned scope registry.
+
+Raw subject: {raw_name}
+Raw kind: {raw_kind or 'unknown'}
+Containing subject: {parent_name or 'unknown'}
+Evidence quote: {evidence_quote or 'not supplied'}
+
+Candidate registry entries:
+{candidates}
+
+Choose a candidate only when it denotes the same durable subject—not merely a
+related person, parent polity, location, event, or similarly named group. If
+none is the same subject, return null. Never invent an id.
+
+Return only JSON:
+{{
+  "scope_id": "one candidate id or null",
+  "confidence": 0.0,
+  "reason": "brief identity justification"
+}}"""
 
 
 def get_classification_prompt(episode_summary: str, full_text: str) -> str:
@@ -299,22 +359,72 @@ def get_classification_second_pass_prompt(
 Return only valid JSON."""
 
 
+def get_phase_reconciliation_prompt(scope_name: str, episodes: List[Dict]) -> str:
+    """Review per-event labels with the surrounding document chronology."""
+    arc_types = ", ".join(DEFAULT_ARC_TAXONOMY)
+    return f"""You are reviewing a chronological set of source-backed historical episodes about one focal subject: {scope_name}.
+
+Episodes, in chronological order:
+{episodes}
+
+For each episode, decide whether its existing legacy arc type and narrative
+phase make sense relative to the surrounding trajectory. This is a
+reconciliation pass, not a request to force one grand story onto unrelated
+events. Preserve null when the evidence does not establish a legacy arc.
+
+Allowed arc types: {arc_types}
+Allowed phases: setup, rising_action, climax, falling_action, resolution,
+boom, euphoria, distress, panic, revulsion.
+
+Rules:
+- A phase is relative to the focal subject's trajectory, not the chapter's
+  position or the emotional intensity of one paragraph.
+- Multiple independent sources may legitimately document the same phase.
+- Use falling_action for consequences unfolding after a turning point and
+  resolution only for a comparatively settled outcome.
+- Never change dates, scope, actors, or factual summaries.
+- Use confidence below 0.5 or null labels when context remains ambiguous.
+
+Return only JSON:
+{{
+  "episodes": [
+    {{
+      "episode_id": "uuid from input",
+      "arc_type": "allowed value or null",
+      "arc_phase": "allowed value or null",
+      "confidence": 0.0,
+      "reason": "brief contextual justification"
+    }}
+  ]
+}}"""
+
+
 def get_linking_prompt(episode1: Dict, episode2: Dict) -> str:
     """Prompt for entity resolution and causal linking.
 
     Stage 4: Determine if two episodes describe same event or are causally related.
     """
+    def evidence_text(episode: Dict) -> str:
+        passages = episode.get("source_passages")
+        if isinstance(passages, list) and passages and isinstance(passages[0], dict):
+            text = passages[0].get("text")
+            if isinstance(text, str):
+                return text[:1600]
+        return str(episode.get("summary", "Unknown"))
+
     return f"""You are analyzing the relationship between two historical episodes for entity resolution.
 
 **Episode 1:**
 - Title: {episode1.get("title", "Unknown")}
 - Summary: {episode1.get("summary", "Unknown")}
-- Time: {episode1.get("time_period", "Unknown")}
+- Time: {episode1.get("start_year") or episode1.get("start_date") or "Unknown"}
+- Source evidence: {evidence_text(episode1)}
 
 **Episode 2:**
 - Title: {episode2.get("title", "Unknown")}
 - Summary: {episode2.get("summary", "Unknown")}
-- Time: {episode2.get("time_period", "Unknown")}
+- Time: {episode2.get("start_year") or episode2.get("start_date") or "Unknown"}
+- Source evidence: {evidence_text(episode2)}
 
 **Possible relationships:**
 1. **same_event**: Episodes describe the same historical event (different sources, same occurrence)
@@ -328,7 +438,7 @@ def get_linking_prompt(episode1: Dict, episode2: Dict) -> str:
 - Provide confidence (0.0-1.0)
 - Explain reasoning
 - If causal, specify mechanism if apparent
-- If causal, provide a verbatim quote from the supplied episode summaries
+- If causal, provide a verbatim quote from the supplied source evidence
   that explicitly supports the direction of causation. Without such a quote,
   return "related" rather than making a causal claim.
 

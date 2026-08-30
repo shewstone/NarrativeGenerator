@@ -17,7 +17,7 @@ from tenacity import (
     retry,
     retry_if_exception_type,
     stop_after_attempt,
-    wait_exponential,
+    wait_random_exponential,
 )
 
 from narrative_engine.extraction.config import LLMConfig
@@ -25,6 +25,35 @@ from narrative_engine.extraction.config import LLMConfig
 logger = structlog.get_logger()
 
 T = TypeVar("T", bound=BaseModel)
+MAX_SEGMENTS_PER_CHUNK = 8
+
+
+def _find_quote_span(text: str, quote: str, cursor: int) -> Optional[tuple[int, int]]:
+    """Locate a boundary quote without trusting superficial typography.
+
+    Model providers sometimes normalize line breaks, curly apostrophes, or
+    punctuation even when asked for a verbatim quote.  An exact lookup stays
+    the fast path; the fallback requires the same consecutive Unicode word
+    tokens, case-insensitively, and therefore does not accept paraphrases.
+    """
+    exact_start = text.find(quote, cursor)
+    if exact_start >= 0:
+        return exact_start, exact_start + len(quote)
+
+    quote_tokens = [match.group(0).casefold() for match in re.finditer(r"\w+", quote)]
+    if len(quote_tokens) < 3:
+        return None
+    source_matches = list(re.finditer(r"\w+", text[cursor:]))
+    source_tokens = [match.group(0).casefold() for match in source_matches]
+    width = len(quote_tokens)
+    for index in range(len(source_tokens) - width + 1):
+        if source_tokens[index : index + width] != quote_tokens:
+            continue
+        return (
+            cursor + source_matches[index].start(),
+            cursor + source_matches[index + width - 1].end(),
+        )
+    return None
 
 
 def materialize_segment_spans(text: str, raw_segments: Any) -> List[Dict[str, Any]]:
@@ -41,7 +70,11 @@ def materialize_segment_spans(text: str, raw_segments: Any) -> List[Dict[str, An
     if not isinstance(raw_segments, list):
         return []
 
-    segments = [dict(segment) for segment in raw_segments if isinstance(segment, dict)]
+    segments = [
+        dict(segment)
+        for segment in raw_segments
+        if isinstance(segment, dict)
+    ][:MAX_SEGMENTS_PER_CHUNK]
     if not segments:
         return []
 
@@ -55,13 +88,73 @@ def materialize_segment_spans(text: str, raw_segments: Any) -> List[Dict[str, An
     for segment in segments:
         span = _resolve_segment_span(text, segment, cursor)
         if span is None:
-            return [_segmentation_fallback(text, segments)]
+            ordered = _resolve_from_ordered_starts(text, segments)
+            return ordered if ordered is not None else [_segmentation_fallback(text, segments)]
         start, end = span
         materialized = dict(segment)
         materialized.update(text=text[start:end], start_char=start, end_char=end)
         resolved.append(materialized)
         cursor = end
 
+    return resolved
+
+
+def _resolve_from_ordered_starts(
+    text: str,
+    segments: List[Dict[str, Any]],
+) -> Optional[List[Dict[str, Any]]]:
+    """Recover boundaries when a model's end offsets/quotes are imperfect.
+
+    Event starts are much easier for an LLM to identify consistently than two
+    exact boundaries. If every start can be found in source order, adjacent
+    starts define lossless, non-overlapping spans. Preamble belongs to the
+    first event and trailing context to the last, so no source text vanishes.
+    """
+    starts: List[int] = []
+    cursor = 0
+    for index, segment in enumerate(segments):
+        start_quote = segment.get("start_quote")
+        supplied_text = segment.get("text")
+        supplied_start = segment.get("start_char")
+
+        start: Optional[int] = None
+        if isinstance(start_quote, str) and start_quote:
+            located = _find_quote_span(text, start_quote, cursor)
+            if located is not None:
+                start = located[0]
+        if start is None and isinstance(supplied_text, str) and supplied_text:
+            located = text.find(supplied_text, cursor)
+            if located >= 0:
+                start = located
+        if (
+            start is None
+            and isinstance(supplied_start, int)
+            and not isinstance(supplied_start, bool)
+            and cursor <= supplied_start < len(text)
+        ):
+            start = supplied_start
+        if start is None:
+            return None
+
+        # Retain introductory context that precedes the first named event.
+        starts.append(0 if index == 0 else start)
+        cursor = max(start + 1, cursor)
+
+    if any(right <= left for left, right in zip(starts, starts[1:], strict=False)):
+        return None
+
+    resolved: List[Dict[str, Any]] = []
+    for index, segment in enumerate(segments):
+        start = starts[index]
+        end = starts[index + 1] if index + 1 < len(starts) else len(text)
+        materialized = dict(segment)
+        materialized.update(
+            text=text[start:end],
+            start_char=start,
+            end_char=end,
+            boundary_resolution="ordered_starts",
+        )
+        resolved.append(materialized)
     return resolved
 
 
@@ -86,8 +179,8 @@ def _resolve_segment_span(
         and cursor <= start < end <= len(text)
     ):
         candidate = text[start:end]
-        if (start_quote is None or candidate.startswith(start_quote)) and (
-            end_quote is None or candidate.endswith(end_quote)
+        if (start_quote is None or candidate.lstrip().startswith(start_quote)) and (
+            end_quote is None or candidate.rstrip().endswith(end_quote)
         ):
             return start, end
 
@@ -99,15 +192,16 @@ def _resolve_segment_span(
 
     if start_quote is None or end_quote is None:
         return None
-    start = text.find(start_quote, cursor)
-    if start < 0:
+    start_span = _find_quote_span(text, start_quote, cursor)
+    if start_span is None:
         return None
+    start, start_quote_end = start_span
     if start_quote == end_quote:
-        return start, start + len(start_quote)
-    end_start = text.find(end_quote, start + len(start_quote))
-    if end_start < 0:
+        return start, start_quote_end
+    end_span = _find_quote_span(text, end_quote, start_quote_end)
+    if end_span is None:
         return None
-    return start, end_start + len(end_quote)
+    return start, end_span[1]
 
 
 def _segmentation_fallback(text: str, segments: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -180,20 +274,35 @@ class LLMClient(ABC):
 class OpenAIClient(LLMClient):
     """OpenAI API client."""
 
+    _MAX_TRUNCATION_RETRY_TOKENS = 8_000
+
     def __init__(self, config: LLMConfig) -> None:
         super().__init__(config)
         client_options = {"api_key": config.api_key or os.getenv("OPENAI_API_KEY")}
         if config.base_url:
             client_options["base_url"] = config.base_url
+        client_options["timeout"] = config.request_timeout_seconds
+        # Keep retries in one jittered layer below. The SDK's own retries plus
+        # tenacity previously multiplied delays and synchronized workers into
+        # another overload burst.
+        client_options["max_retries"] = 0
         self.client = openai.AsyncOpenAI(**client_options)
 
     async def aclose(self) -> None:
         await _close_sdk_client(self.client)
 
     @retry(
-        retry=retry_if_exception_type((openai.RateLimitError, openai.APITimeoutError)),
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=4, max=10),
+        retry=retry_if_exception_type(
+            (
+                openai.RateLimitError,
+                openai.APITimeoutError,
+                openai.APIConnectionError,
+                openai.InternalServerError,
+            )
+        ),
+        stop=stop_after_attempt(6),
+        wait=wait_random_exponential(multiplier=2, min=4, max=30),
+        reraise=True,
     )
     async def complete(
         self,
@@ -213,29 +322,55 @@ class OpenAIClient(LLMClient):
             if self.config.reasoning_effort:
                 # extra_body works with SDK versions whose typed Chat
                 # Completions signature does not expose Venice's extension.
-                provider_options["extra_body"] = {
+                extra_body: Dict[str, Any] = {
                     "reasoning_effort": self.config.reasoning_effort,
                 }
-            response = await self.client.chat.completions.create(
-                model=model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a precise historical data extraction system. Return only valid JSON.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=temperature,
-                max_tokens=max_tokens,
-                response_format={"type": "json_object"} if response_format else None,
-                **provider_options,
-            )
-
-            finish_reason = response.choices[0].finish_reason
-            if finish_reason == "length":
+                # Venice also exposes an explicit provider control. Some
+                # reasoning models have continued thinking despite the
+                # OpenAI-compatible `reasoning_effort="none"` field alone,
+                # exhausting a small structured-output budget before emitting
+                # JSON. Send both documented controls only to Venice hosts.
+                if (
+                    self.config.reasoning_effort == "none"
+                    and self.config.base_url
+                    and "venice.ai" in self.config.base_url.lower()
+                ):
+                    extra_body["venice_parameters"] = {
+                        "disable_thinking": True,
+                        "strip_thinking_response": True,
+                    }
+                provider_options["extra_body"] = extra_body
+            for truncation_attempt in range(2):
+                response = await self.client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are a precise historical data extraction system. Return only valid JSON.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    response_format={"type": "json_object"} if response_format else None,
+                    **provider_options,
+                )
+                finish_reason = response.choices[0].finish_reason
+                if finish_reason != "length":
+                    break
+                if truncation_attempt == 0 and max_tokens < self._MAX_TRUNCATION_RETRY_TOKENS:
+                    next_max_tokens = min(max_tokens * 2, self._MAX_TRUNCATION_RETRY_TOKENS)
+                    logger.warning(
+                        "OpenAI response truncated; retrying with larger output budget",
+                        model=model,
+                        max_tokens=max_tokens,
+                        next_max_tokens=next_max_tokens,
+                    )
+                    max_tokens = next_max_tokens
+                    continue
                 raise LLMError(
                     f"Response truncated at max_tokens={max_tokens} (model={model}); "
-                    "raise NE_LLM_MAX_TOKENS or lower reasoning effort"
+                    "lower reasoning effort or reduce the input chunk"
                 )
             content = response.choices[0].message.content
             if not content:
@@ -251,7 +386,16 @@ class OpenAIClient(LLMClient):
                 },
             }
 
-        except (openai.RateLimitError, openai.APITimeoutError) as e:
+        except LLMError:
+            # Validation failures raised above already carry the useful
+            # model/token context; do not obscure them with another wrapper.
+            raise
+        except (
+            openai.RateLimitError,
+            openai.APITimeoutError,
+            openai.APIConnectionError,
+            openai.InternalServerError,
+        ) as e:
             # Preserve these exception types so tenacity can actually retry
             # them; the broad handler below previously wrapped them in
             # LLMError before the retry predicate ever saw them.
@@ -443,6 +587,9 @@ class ExtractionPipeline:
         result = await self.client.complete_with_json(
             prompt=prompt,
             model=model or (self.config.segmentation_model if self.config else None),
+            # Bound a simple list-of-boundaries task independently from the
+            # richer extraction/classification output budget.
+            max_tokens=1_000,
         )
 
         result["episodes"] = materialize_segment_spans(text, result.get("episodes"))
@@ -458,6 +605,7 @@ class ExtractionPipeline:
         self,
         segment_text: str,
         segment_summary: str,
+        narrative_context: Optional[str] = None,
         model: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Stage 2: Extract structured data from segment."""
@@ -465,7 +613,7 @@ class ExtractionPipeline:
 
         self.logger.info("Starting extraction", segment_summary=segment_summary[:50])
 
-        prompt = get_extraction_prompt(segment_text, segment_summary)
+        prompt = get_extraction_prompt(segment_text, segment_summary, narrative_context)
         result = await self.client.complete_with_json(
             prompt=prompt,
             model=model or (self.config.extraction_model if self.config else None),
@@ -474,6 +622,32 @@ class ExtractionPipeline:
         self.logger.info("Extraction complete", episode_title=result.get("title", "Unknown"))
 
         return result
+
+    async def canonicalize_scope(
+        self,
+        raw_name: str,
+        raw_kind: Optional[str],
+        parent_name: Optional[str],
+        evidence_quote: Optional[str],
+        candidates: List[Dict[str, Any]],
+        model: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Resolve a raw focal subject only within retrieved registry ids."""
+        from narrative_engine.extraction.prompts import get_scope_canonicalization_prompt
+
+        prompt = get_scope_canonicalization_prompt(
+            raw_name,
+            raw_kind,
+            parent_name,
+            evidence_quote,
+            candidates,
+        )
+        return await self.client.complete_with_json(
+            prompt=prompt,
+            model=model or (self.config.scope_model if self.config else None),
+            temperature=0.0,
+            max_tokens=500,
+        )
 
     async def classify(
         self,
@@ -534,6 +708,22 @@ class ExtractionPipeline:
         )
 
         return result
+
+    async def reconcile_phases(
+        self,
+        scope_name: str,
+        episodes: List[Dict[str, Any]],
+        model: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Re-evaluate phase labels with document-level chronology."""
+        from narrative_engine.extraction.prompts import get_phase_reconciliation_prompt
+
+        prompt = get_phase_reconciliation_prompt(scope_name, episodes)
+        return await self.client.complete_with_json(
+            prompt=prompt,
+            model=model or (self.config.reconciliation_model if self.config else None),
+            temperature=0.0,
+        )
 
     async def link(
         self,

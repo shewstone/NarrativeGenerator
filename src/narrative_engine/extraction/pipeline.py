@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import re
+import time
 from contextlib import suppress
 from typing import Any, Dict, List, Optional
 
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from narrative_engine.extraction.client import ExtractionPipeline, materialize_segment_spans
+from narrative_engine.extraction.client import (
+    ExtractionPipeline,
+    LLMError,
+    materialize_segment_spans,
+)
 from narrative_engine.extraction.config import ExtractionPipelineConfig
 from narrative_engine.models import (
     Actor,
@@ -24,11 +31,10 @@ from narrative_engine.models import (
     SituationConfiguration,
     SituationDomain,
     SituationScale,
+    SourcePassage,
     utcnow,
 )
-from narrative_engine.storage.repositories import (
-    RepositoryFactory,
-)
+from narrative_engine.storage.repositories import RepositoryFactory
 
 logger = structlog.get_logger()
 
@@ -62,6 +68,19 @@ _LINK_STOP_WORDS = {
     "while",
     "with",
 }
+
+# Some otherwise-valid classifiers occasionally echo a semantic phase from an
+# arc-type name instead of the legacy vocabulary stated in the prompt. Keep
+# the compatibility layer narrow and evidence-backed rather than accepting an
+# arbitrary new phase that downstream composition cannot order.
+_ARC_PHASE_ALIASES = {
+    "renewal": ArcPhase.RESOLUTION,
+}
+_CANONICAL_SCOPE_SELECTION_FLOOR = 0.8
+
+
+def _parse_arc_phase(value: str) -> ArcPhase:
+    return _ARC_PHASE_ALIASES[value] if value in _ARC_PHASE_ALIASES else ArcPhase(value)
 
 
 class PipelineResult:
@@ -104,13 +123,12 @@ class ExtractionOrchestrator:
         text: str,
         source_chunk_id: str,
         session: AsyncSession,
+        skip_segmentation: bool = False,
     ) -> PipelineResult:
         """Process raw text through full pipeline and store results.
 
         Stage 1: Segmentation → Stage 2: Extraction → Stage 3: Classification
         """
-        import time
-
         start_time = time.time()
 
         episodes: List[Episode] = []
@@ -118,12 +136,80 @@ class ExtractionOrchestrator:
 
         try:
             # Stage 1: Segmentation
-            if self.config.enable_segmentation:
+            if self.config.enable_segmentation and not skip_segmentation:
                 self.logger.info("Stage 1: Segmentation", chunk_id=source_chunk_id)
-                segmentation_result = await self.pipeline.segment(text)
+                try:
+                    stage_started = time.perf_counter()
+                    segmentation_result = await self.pipeline.segment(text)
+                    raw_segments = segmentation_result.get("episodes")
+                    if isinstance(raw_segments, list) and all(
+                        isinstance(segment, dict) and isinstance(segment.get("text"), str)
+                        for segment in raw_segments
+                    ):
+                        # ExtractionPipeline.segment already materializes raw
+                        # model boundaries. Custom pipeline implementations
+                        # may return raw offsets, handled by the fallback.
+                        segments = [dict(segment) for segment in raw_segments]
+                    else:
+                        segments = materialize_segment_spans(text, raw_segments)
+                    response_without_text = {
+                        **segmentation_result,
+                        "episodes": [
+                            {key: value for key, value in segment.items() if key != "text"}
+                            for segment in segments
+                        ],
+                    }
+                    self._record_stage(
+                        session,
+                        source_chunk_id=source_chunk_id,
+                        pipeline_stage="segmentation",
+                        prompt_version="1.3.0",
+                        model_used=self.config.segmentation_model,
+                        input_data=self._text_audit_input(text),
+                        output_data={
+                            "response": response_without_text,
+                            "materialized_segments": [
+                                {
+                                    "number": segment.get("number"),
+                                    "start_char": segment.get("start_char"),
+                                    "end_char": segment.get("end_char"),
+                                    "fallback": segment.get("segmentation_fallback"),
+                                }
+                                for segment in segments
+                            ],
+                        },
+                        processing_time_ms=self._elapsed_ms(stage_started),
+                    )
+                except LLMError as exc:
+                    # Segmentation improves granularity but is not required
+                    # for correctness: SmartChunker has already bounded the
+                    # source. A truncated/invalid segment response should not
+                    # discard an otherwise extractable book checkpoint.
+                    self.logger.warning(
+                        "Segmentation unavailable; extracting chunk once",
+                        chunk_id=source_chunk_id,
+                        error=str(exc),
+                    )
+                    segments = [
+                        {
+                            "number": 1,
+                            "summary": text[:200],
+                            "text": text,
+                            "segmentation_fallback": "segmentation_llm_error",
+                        }
+                    ]
+                    self._record_stage(
+                        session,
+                        source_chunk_id=source_chunk_id,
+                        pipeline_stage="segmentation",
+                        prompt_version="1.3.0",
+                        model_used=self.config.segmentation_model,
+                        input_data=self._text_audit_input(text),
+                        output_data={"fallback": "segmentation_llm_error"},
+                        error_message=str(exc),
+                    )
 
-                segments = materialize_segment_spans(text, segmentation_result.get("episodes"))
-                if segments and segments[0].get("segmentation_fallback"):
+                if segments and segments[0].get("segmentation_fallback") == "unresolved_source_spans":
                     self.logger.warning(
                         "Segmentation spans could not be resolved; extracting chunk once",
                         chunk_id=source_chunk_id,
@@ -133,45 +219,85 @@ class ExtractionOrchestrator:
                 # If segmentation disabled, treat whole text as one segment
                 segments = [{"number": 1, "summary": text[:200], "text": text}]
 
-            # Stage 2: Extraction
-            for segment in segments:
-                try:
-                    episode = await self._extract_segment(
-                        segment,
-                        text,  # Full context
-                        source_chunk_id,
-                    )
+            # Stage 2: Extraction. Supply only bounded neighboring summaries,
+            # not the full chunk again for every segment. This gives focal
+            # scope continuity without multiplying input-token and audit size.
+            narrative_context = "\n".join(
+                f"{index}. {str(item.get('summary') or '')[:240]}"
+                for index, item in enumerate(segments, start=1)
+            )
+            extraction_slots = asyncio.Semaphore(self.config.stage_concurrency)
 
-                    if episode:
-                        episodes.append(episode)
+            async def extract_one(segment: Dict[str, Any]) -> tuple[Optional[Episode], Optional[str]]:
+                async with extraction_slots:
+                    try:
+                        episode = await self._extract_segment(
+                            segment,
+                            text,  # Full context
+                            source_chunk_id,
+                            session=session,
+                            narrative_context=narrative_context,
+                        )
+                        return episode, None
+                    except Exception as exc:
+                        self.logger.error(
+                            "Extraction failed for segment",
+                            segment=segment.get("number"),
+                            error=str(exc),
+                        )
+                        return None, f"Segment {segment.get('number')}: {str(exc)}"
 
-                except Exception as e:
-                    self.logger.error(
-                        "Extraction failed for segment",
-                        segment=segment.get("number"),
-                        error=str(e),
-                    )
-                    errors.append(f"Segment {segment.get('number')}: {str(e)}")
+            extraction_results = await asyncio.gather(
+                *(extract_one(segment) for segment in segments)
+            )
+            for episode, error in extraction_results:
+                if episode is not None:
+                    episodes.append(episode)
+                if error is not None:
+                    errors.append(error)
 
             # Stage 3: Classification
             if self.config.enable_classification:
                 self.logger.info("Stage 3: Classification")
 
-                for episode in episodes:
-                    try:
-                        await self._classify_episode(episode)
-                    except Exception as e:
-                        self.logger.error(
-                            "Classification failed",
-                            episode=episode.title,
-                            error=str(e),
-                        )
-                        errors.append(f"Classification for {episode.title}: {str(e)}")
+                classification_slots = asyncio.Semaphore(self.config.stage_concurrency)
+
+                async def classify_one(episode: Episode) -> Optional[str]:
+                    async with classification_slots:
+                        try:
+                            source_text = (
+                                episode.source_passages[0].text
+                                if episode.source_passages
+                                else episode.summary
+                            )
+                            await self._classify_episode(
+                                episode,
+                                source_text=source_text,
+                                source_chunk_id=source_chunk_id,
+                                session=session,
+                            )
+                            return None
+                        except Exception as exc:
+                            self.logger.error(
+                                "Classification failed",
+                                episode=episode.title,
+                                error=str(exc),
+                            )
+                            return f"Classification for {episode.title}: {str(exc)}"
+
+                classification_errors = await asyncio.gather(
+                    *(classify_one(episode) for episode in episodes)
+                )
+                errors.extend(error for error in classification_errors if error is not None)
 
             # Store in database
             await self._store_episodes(episodes, session)
 
-            if self.config.enable_linking and len(episodes) > 1:
+            if (
+                self.config.enable_linking
+                and self.config.enable_chunk_linking
+                and len(episodes) > 1
+            ):
                 self.logger.info("Stage 4: Linking")
                 total_pairs = len(episodes) * (len(episodes) - 1) // 2
                 candidate_pairs = 0
@@ -183,13 +309,12 @@ class ExtractionOrchestrator:
                         try:
                             await self._link_episode_pair(source, target, session)
                         except Exception as e:
-                            self.logger.error(
-                                "Linking failed",
+                            self.logger.warning(
+                                "Optional chunk link rejected",
                                 source=source.title,
                                 target=target.title,
                                 error=str(e),
                             )
-                            errors.append(f"Linking {source.title} -> {target.title}: {str(e)}")
                 self.logger.info(
                     "Linking prefilter complete",
                     total_pairs=total_pairs,
@@ -217,6 +342,8 @@ class ExtractionOrchestrator:
         segment: Dict[str, Any],
         full_text: str,
         source_chunk_id: str,
+        session: Optional[AsyncSession] = None,
+        narrative_context: Optional[str] = None,
     ) -> Optional[Episode]:
         """Extract structured data from a single segment."""
         if not self.config.enable_extraction:
@@ -226,29 +353,85 @@ class ExtractionOrchestrator:
         segment_summary = segment.get("summary", segment_text[:200])
 
         # Call LLM for extraction
-        extraction_result = await self.pipeline.extract(
-            segment_text=segment_text,
-            segment_summary=segment_summary,
+        stage_started = time.perf_counter()
+        try:
+            extraction_result = await self.pipeline.extract(
+                segment_text=segment_text,
+                segment_summary=segment_summary,
+                narrative_context=narrative_context,
+            )
+        except Exception as exc:
+            self._record_stage(
+                session,
+                source_chunk_id=source_chunk_id,
+                pipeline_stage="extraction",
+                prompt_version="2.1.0",
+                model_used=self.config.extraction_model,
+                input_data={
+                    **self._text_audit_input(segment_text),
+                    "segment_number": segment.get("number"),
+                    "segment_summary": segment_summary,
+                },
+                output_data={},
+                processing_time_ms=self._elapsed_ms(stage_started),
+                error_message=str(exc),
+            )
+            raise
+        if not isinstance(extraction_result, dict):
+            raise TypeError("Extraction response must be a JSON object")
+
+        self._record_stage(
+            session,
+            source_chunk_id=source_chunk_id,
+            pipeline_stage="extraction",
+            prompt_version="2.1.0",
+            model_used=self.config.extraction_model,
+            input_data={
+                **self._text_audit_input(segment_text),
+                "segment_number": segment.get("number"),
+                "segment_summary": segment_summary,
+                "start_char": segment.get("start_char"),
+                "end_char": segment.get("end_char"),
+            },
+            output_data=extraction_result,
+            processing_time_ms=self._elapsed_ms(stage_started),
         )
+
+        setting_value = extraction_result.get("setting")
+        setting = setting_value if isinstance(setting_value, dict) else {}
 
         # Build Episode from extraction result
         episode = Episode(
             title=extraction_result.get("title", "Untitled"),
             summary=extraction_result.get("summary", ""),
-            location=extraction_result.get("setting", {}).get("location"),
-            setting_description=extraction_result.get("setting", {}).get("description"),
-            initiating_conditions=extraction_result.get("initiating_conditions", []),
-            escalation_mechanics=extraction_result.get("escalation_mechanics", []),
+            location=setting.get("location"),
+            setting_description=setting.get("description"),
+            initiating_conditions=self._string_list(extraction_result.get("initiating_conditions")),
+            escalation_mechanics=self._string_list(extraction_result.get("escalation_mechanics")),
             tension=extraction_result.get("tension"),
             resolution=extraction_result.get("resolution"),
-            consequences=extraction_result.get("consequences", []),
+            consequences=self._string_list(extraction_result.get("consequences")),
             extracted_from=[source_chunk_id],
+            source_passages=[
+                SourcePassage(
+                    work_id=self._work_id_from_chunk_id(source_chunk_id),
+                    passage_id=(
+                        f"{source_chunk_id}:"
+                        f"{segment.get('start_char', 0)}-{segment.get('end_char', len(segment_text))}"
+                    ),
+                    text=segment_text,
+                )
+            ],
         )
 
         self._apply_focal_scope(episode, extraction_result.get("focal_scope"))
+        await self._canonicalize_focal_scope(
+            episode,
+            source_chunk_id=source_chunk_id,
+            session=session,
+        )
 
         # Parse dates
-        setting = extraction_result.get("setting", {})
         if "start_date" in setting:
             episode = self._apply_normalized_dates(episode, setting)
         elif setting.get("time_period"):
@@ -257,14 +440,14 @@ class ExtractionOrchestrator:
         # Parse actors. canonical_role passes the tau_role fit floor or stays
         # None (no forced choice — T2); unknown vocabulary values are treated
         # as unresolved rather than invented roles entering the render.
-        actors_data = extraction_result.get("actors", [])
+        actors_data = [actor for actor in self._as_list(extraction_result.get("actors")) if isinstance(actor, dict)]
         episode.actors = [
             Actor(
                 name=a.get("name", "Unknown"),
                 role=a.get("role", "unknown"),
                 canonical_role=self._resolve_canonical_role(a),
-                role_fit_confidence=a.get("role_fit_confidence"),
-                attributes=a.get("attributes", {}),
+                role_fit_confidence=self._bounded_confidence(a.get("role_fit_confidence")),
+                attributes=a.get("attributes") if isinstance(a.get("attributes"), dict) else {},
             )
             for a in actors_data
         ]
@@ -311,6 +494,119 @@ class ExtractionOrchestrator:
                     parent = get_registry().get(canonical.parent_scope_id)
                     episode.parent_scope_name = parent.name if parent else None
 
+    async def _canonicalize_focal_scope(
+        self,
+        episode: Episode,
+        *,
+        source_chunk_id: str,
+        session: Optional[AsyncSession],
+    ) -> None:
+        """Resolve a high-confidence raw name from a bounded candidate set."""
+        if (
+            episode.scope_id
+            or not episode.scope_name
+            or episode.scope_confidence is None
+            or episode.scope_confidence < self.config.scope_confidence_floor
+        ):
+            return
+
+        from narrative_engine.scopes import get_registry, suggest_scopes
+
+        raw_kind = episode.scope_kind.value if episode.scope_kind else None
+        suggestions = suggest_scopes(
+            episode.scope_name,
+            kind=raw_kind,
+            parent_name=episode.parent_scope_name,
+            limit=5,
+        )
+        # Avoid spending a model call when lexical retrieval found no
+        # meaningful identity candidate. Such names remain visible residue.
+        if not suggestions or suggestions[0].score < 0.58:
+            return
+
+        registry = get_registry()
+        candidate_payload = []
+        for suggestion in suggestions:
+            parent = (
+                registry.get(suggestion.scope.parent_scope_id)
+                if suggestion.scope.parent_scope_id
+                else None
+            )
+            candidate_payload.append(
+                {
+                    "id": suggestion.scope.id,
+                    "name": suggestion.scope.name,
+                    "kind": suggestion.scope.kind.value,
+                    "parent": parent.name if parent else None,
+                    "retrieval_score": suggestion.score,
+                }
+            )
+
+        stage_started = time.perf_counter()
+        try:
+            result = await self.pipeline.canonicalize_scope(
+                raw_name=episode.scope_name,
+                raw_kind=raw_kind,
+                parent_name=episode.parent_scope_name,
+                evidence_quote=episode.scope_evidence,
+                candidates=candidate_payload,
+            )
+        except Exception as exc:
+            self._record_stage(
+                session,
+                source_chunk_id=source_chunk_id,
+                pipeline_stage="scope_canonicalization",
+                prompt_version="1.0.0",
+                model_used=self.config.scope_model,
+                input_data={"raw_name": episode.scope_name, "candidates": candidate_payload},
+                output_data={},
+                processing_time_ms=self._elapsed_ms(stage_started),
+                error_message=str(exc),
+            )
+            self.logger.warning(
+                "Scope canonicalization unavailable; retaining raw scope",
+                raw_scope=episode.scope_name,
+                error=str(exc),
+            )
+            return
+        if not isinstance(result, dict):
+            return
+
+        confidence = self._bounded_confidence(result.get("confidence"), 0.0) or 0.0
+        selected_id = result.get("scope_id")
+        allowed_ids = {candidate["id"] for candidate in candidate_payload}
+        accepted = (
+            isinstance(selected_id, str)
+            and selected_id in allowed_ids
+            and confidence >= _CANONICAL_SCOPE_SELECTION_FLOOR
+        )
+        self._record_stage(
+            session,
+            source_chunk_id=source_chunk_id,
+            pipeline_stage="scope_canonicalization",
+            prompt_version="1.0.0",
+            model_used=self.config.scope_model,
+            input_data={"raw_name": episode.scope_name, "candidates": candidate_payload},
+            output_data={**result, "accepted": accepted},
+            confidence=confidence,
+            processing_time_ms=self._elapsed_ms(stage_started),
+        )
+        if not accepted:
+            return
+
+        canonical = registry.get(selected_id)
+        if canonical is None:
+            return
+        episode.scope_id = canonical.id
+        episode.scope_kind = canonical.kind
+        if canonical.parent_scope_id and not episode.parent_scope_name:
+            parent = registry.get(canonical.parent_scope_id)
+            episode.parent_scope_name = parent.name if parent else None
+        reason = result.get("reason")
+        if isinstance(reason, str) and reason.strip():
+            note = f"Registry match: {reason.strip()}"
+            episode.scope_notes = f"{episode.scope_notes}; {note}" if episode.scope_notes else note
+
     @staticmethod
     def _bounded_confidence(value: Any, default: Optional[float] = None) -> Optional[float]:
         """Parse a finite 0..1 score without trusting arbitrary LLM JSON."""
@@ -322,26 +618,117 @@ class ExtractionOrchestrator:
             return default
         return parsed if 0.0 <= parsed <= 1.0 else default
 
+    @staticmethod
+    def _as_list(value: Any) -> List[Any]:
+        """Normalize a drifting JSON collection without iterating strings."""
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return value
+        if isinstance(value, tuple):
+            return list(value)
+        return [value]
+
+    @classmethod
+    def _string_list(cls, value: Any) -> List[str]:
+        """Accept a scalar string or a list and discard non-string debris."""
+        return [item for item in cls._as_list(value) if isinstance(item, str)]
+
+    @staticmethod
+    def _work_id_from_chunk_id(source_chunk_id: str) -> str:
+        """Recover a stable work id from SmartChunker's ``work_id_N`` id."""
+        return re.sub(r"_\d+$", "", source_chunk_id)
+
+    @staticmethod
+    def _episode_source_chunk(episode: Episode) -> str:
+        return episode.extracted_from[0] if episode.extracted_from else "unknown"
+
+    @staticmethod
+    def _text_audit_input(text: str) -> Dict[str, Any]:
+        """Describe an LLM input without duplicating source text in audit JSON.
+
+        Exact evidence is stored once in ``source_passages``. The audit row
+        retains a digest and bounded preview so requests can be correlated
+        without multiplying the database footprint by every pipeline stage.
+        """
+        encoded = text.encode("utf-8", errors="replace")
+        return {
+            "text_sha256": hashlib.sha256(encoded).hexdigest(),
+            "characters": len(text),
+            "preview": text[:240],
+        }
+
+    @staticmethod
+    def _elapsed_ms(started: float) -> int:
+        return max(1, int((time.perf_counter() - started) * 1000))
+
+    def _record_stage(
+        self,
+        session: Optional[AsyncSession],
+        *,
+        source_chunk_id: str,
+        pipeline_stage: str,
+        prompt_version: str,
+        model_used: str,
+        input_data: Dict[str, Any],
+        output_data: Dict[str, Any],
+        confidence: Optional[float] = None,
+        processing_time_ms: Optional[int] = None,
+        error_message: Optional[str] = None,
+    ) -> None:
+        """Append a transactional audit record when using a real DB session."""
+        if session is None or not isinstance(session, AsyncSession):
+            return
+        from narrative_engine.storage.orm_models import ExtractionRecordORM
+
+        session.add(
+            ExtractionRecordORM(
+                source_chunk_id=source_chunk_id,
+                pipeline_stage=pipeline_stage,
+                prompt_version=prompt_version,
+                model_used=model_used,
+                input=input_data,
+                output=output_data,
+                confidence=confidence,
+                processing_time_ms=processing_time_ms,
+                error_message=error_message,
+            )
+        )
+
     def _apply_normalized_dates(self, episode: Episode, setting: Dict[str, Any]) -> Episode:
-        """Apply LLM-normalized partial ISO dates after deterministic validation."""
+        """Apply normalized dates while retaining signed BCE years.
+
+        Python and PostgreSQL datetimes begin at 1 CE. Signed year columns are
+        therefore authoritative for chronological ordering; compatible CE
+        values also receive datetime bounds for existing consumers.
+        """
         import calendar
         import re
         from datetime import datetime, timezone
 
-        def parse_partial(value: Optional[str], *, end_bound: bool) -> Optional[datetime]:
+        def parse_partial(value: Optional[str], *, end_bound: bool) -> tuple[Optional[int], Optional[datetime]]:
             if value is None:
-                return None
-            match = re.fullmatch(r"(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?", value)
+                return None, None
+            if not isinstance(value, str):
+                raise ValueError(f"invalid normalized date {value!r}")
+            match = re.fullmatch(r"(-?\d{1,4})(?:-(\d{2})(?:-(\d{2}))?)?", value)
             if not match:
                 raise ValueError(f"invalid normalized date {value!r}")
             year = int(match.group(1))
+            if year == 0:
+                raise ValueError("historical dates do not use year zero")
             month = int(match.group(2) or (12 if end_bound else 1))
-            day = int(match.group(3) or (calendar.monthrange(year, month)[1] if end_bound else 1))
-            return datetime(year, month, day, tzinfo=timezone.utc)
+            calendar_year = year if year > 0 else 2000
+            day = int(match.group(3) or (calendar.monthrange(calendar_year, month)[1] if end_bound else 1))
+            # Validate month/day even for BCE values, which cannot be placed
+            # in datetime. The signed year remains usable by graph ordering.
+            datetime(calendar_year, month, day)
+            date = datetime(year, month, day, tzinfo=timezone.utc) if year > 0 else None
+            return year, date
 
         try:
-            episode.start_date = parse_partial(setting.get("start_date"), end_bound=False)
-            episode.end_date = parse_partial(setting.get("end_date"), end_bound=True)
+            episode.start_year, episode.start_date = parse_partial(setting.get("start_date"), end_bound=False)
+            episode.end_year, episode.end_date = parse_partial(setting.get("end_date"), end_bound=True)
             episode.date_precision = setting.get("date_precision") or "unknown"
         except (TypeError, ValueError) as e:
             self.logger.warning(
@@ -358,17 +745,61 @@ class ExtractionOrchestrator:
         candidate = actor_data.get("canonical_role")
         if not candidate or not is_known_role(candidate):
             return None
-        confidence = actor_data.get("role_fit_confidence")
+        confidence = self._bounded_confidence(actor_data.get("role_fit_confidence"))
         if confidence is None or confidence < self.config.role_fit_floor:
             return None
         return candidate
 
-    async def _classify_episode(self, episode: Episode) -> None:
+    async def _classify_episode(
+        self,
+        episode: Episode,
+        source_text: Optional[str] = None,
+        source_chunk_id: Optional[str] = None,
+        session: Optional[AsyncSession] = None,
+    ) -> None:
         """Classify a neutral situation pattern and optional legacy arc."""
         # First pass classification
-        classification = await self.pipeline.classify(
-            episode_summary=episode.summary,
-            full_text=f"{episode.title}\n{episode.summary}",
+        classification_text = source_text or f"{episode.title}\n{episode.summary}"
+        stage_started = time.perf_counter()
+        try:
+            classification = await self.pipeline.classify(
+                episode_summary=episode.summary,
+                full_text=classification_text,
+            )
+        except Exception as exc:
+            self._record_stage(
+                session,
+                source_chunk_id=source_chunk_id or self._episode_source_chunk(episode),
+                pipeline_stage="classification",
+                prompt_version="2.0.0",
+                model_used=self.config.classification_model,
+                input_data={
+                    "episode_id": str(episode.id),
+                    "summary": episode.summary,
+                    **self._text_audit_input(classification_text),
+                },
+                output_data={},
+                processing_time_ms=self._elapsed_ms(stage_started),
+                error_message=str(exc),
+            )
+            raise
+        if not isinstance(classification, dict):
+            raise TypeError("Classification response must be a JSON object")
+
+        self._record_stage(
+            session,
+            source_chunk_id=source_chunk_id or self._episode_source_chunk(episode),
+            pipeline_stage="classification",
+            prompt_version="2.0.0",
+            model_used=self.config.classification_model,
+            input_data={
+                "episode_id": str(episode.id),
+                "summary": episode.summary,
+                **self._text_audit_input(classification_text),
+            },
+            output_data=classification,
+            confidence=self._bounded_confidence(classification.get("phase_confidence")),
+            processing_time_ms=self._elapsed_ms(stage_started),
         )
 
         # Primary, scale-neutral reading.
@@ -385,8 +816,8 @@ class ExtractionOrchestrator:
                 episode.situation_scale = SituationScale(scale_str)
 
         episode.domains = []
-        for domain in classification.get("domains", []):
-            with suppress(ValueError):
+        for domain in self._as_list(classification.get("domains")):
+            with suppress(ValueError, TypeError):
                 parsed_domain = SituationDomain(domain)
                 if parsed_domain not in episode.domains:
                     episode.domains.append(parsed_domain)
@@ -404,8 +835,8 @@ class ExtractionOrchestrator:
             episode.configuration = SituationConfiguration(**scores)
 
         episode.mechanism_families = []
-        for family in classification.get("mechanism_families", []):
-            with suppress(ValueError):
+        for family in self._as_list(classification.get("mechanism_families")):
+            with suppress(ValueError, TypeError):
                 parsed_family = MechanismFamily(family)
                 if parsed_family not in episode.mechanism_families:
                     episode.mechanism_families.append(parsed_family)
@@ -422,7 +853,7 @@ class ExtractionOrchestrator:
 
         if arc_phase_str:
             try:
-                episode.arc_phase = ArcPhase(arc_phase_str)
+                episode.arc_phase = _parse_arc_phase(arc_phase_str)
             except ValueError:
                 self.logger.warning(f"Unknown arc phase: {arc_phase_str}")
 
@@ -430,14 +861,17 @@ class ExtractionOrchestrator:
         episode.arc_rationale = classification.get("rationale")
 
         # Handle secondary arcs
-        secondary = classification.get("secondary_arcs", [])
-        for sec in secondary:
-            with suppress(ValueError):
+        for sec in self._as_list(classification.get("secondary_arcs")):
+            if not isinstance(sec, dict):
+                continue
+            with suppress(ValueError, TypeError):
+                confidence = self._bounded_confidence(sec.get("confidence"), 0.5)
+                phase = sec.get("phase", "unknown")
                 episode.secondary_arcs.append(
                     (
                         ArcType(sec.get("type", "unknown")),
-                        ArcPhase(sec.get("phase", "unknown")),
-                        sec.get("confidence", 0.5),
+                        _parse_arc_phase(phase),
+                        confidence if confidence is not None else 0.5,
                     )
                 )
 
@@ -445,8 +879,8 @@ class ExtractionOrchestrator:
         # skipped, not fatal -- the LLM occasionally drifts from the
         # vocabulary given in the prompt.
         episode.mechanism_tags = []
-        for tag in classification.get("mechanism_tags", []):
-            with suppress(ValueError):
+        for tag in self._as_list(classification.get("mechanism_tags")):
+            with suppress(ValueError, TypeError):
                 parsed_tag = MechanismTag(tag)
                 if parsed_tag not in episode.mechanism_tags:
                     episode.mechanism_tags.append(parsed_tag)
@@ -466,7 +900,14 @@ class ExtractionOrchestrator:
         if not pattern_clears_floor:
             episode.change_pattern = None
 
-        arc_clears_floor = episode.arc_type is not None and episode.phase_confidence >= floor
+        # A legacy arc is an ordered (type, phase) reading.  Keeping a type
+        # after the model invents an unusable phase creates an instance that
+        # composition cannot place, so both labels are required.
+        arc_clears_floor = (
+            episode.arc_type is not None
+            and episode.arc_phase is not None
+            and episode.phase_confidence >= floor
+        )
         if not arc_clears_floor:
             if episode.arc_type is not None:
                 self.logger.info(
@@ -516,17 +957,270 @@ class ExtractionOrchestrator:
                 end = date_parser.parse(range_match.group(2), fuzzy=True)
                 episode.start_date = start
                 episode.end_date = end
+                episode.start_year = start.year
+                episode.end_year = end.year
                 episode.date_precision = "range"
             else:
                 # Single date
                 date = date_parser.parse(time_period, fuzzy=True)
                 episode.start_date = date
+                episode.start_year = date.year
                 episode.date_precision = precision
 
         except Exception as e:
             self.logger.warning(f"Failed to parse date: {time_period}", error=str(e))
 
         return episode
+
+    async def reconcile_document_phases(
+        self,
+        chunk_ids: List[str],
+        session: AsyncSession,
+    ) -> List[Episode]:
+        """Reconcile phase labels after all episodes in one work are visible.
+
+        Per-episode classification remains useful for immediate checkpointing;
+        this bounded second pass supplies the chronology that an isolated
+        passage cannot. Only validated, above-floor assignments are applied.
+        """
+        from narrative_engine.composition.identity import _episode_date_key
+        from narrative_engine.scopes import scope_partition_key
+        from narrative_engine.storage.orm_models import EpisodeORM
+        from narrative_engine.storage.repositories import EpisodeRepository
+
+        episodes = await EpisodeRepository(session).get_for_chunks(chunk_ids)
+        groups: Dict[str, List[Episode]] = {}
+        for episode in episodes:
+            if (
+                episode.scope_confidence is not None
+                and episode.scope_confidence < self.config.scope_confidence_floor
+            ):
+                continue
+            key = scope_partition_key(episode.scope_id, episode.scope_name)
+            if key:
+                groups.setdefault(key, []).append(episode)
+
+        updated: List[Episode] = []
+        document_id = f"{self._work_id_from_chunk_id(chunk_ids[0])}:document" if chunk_ids else "unknown:document"
+        for group in groups.values():
+            if len(group) < 2:
+                continue
+            ordered = sorted(group, key=_episode_date_key)
+            # Keep prompts bounded. Adjacent windows overlap by one episode
+            # so a boundary event retains context without quadratic growth.
+            windows = [ordered[index : index + 20] for index in range(0, len(ordered), 19)]
+            for window in windows:
+                if len(window) < 2:
+                    continue
+                payload = [
+                    {
+                        "episode_id": str(episode.id),
+                        "date": episode.start_year
+                        or (episode.start_date.year if episode.start_date else None),
+                        "title": episode.title,
+                        "summary": episode.summary,
+                        "existing_arc_type": episode.arc_type.value if episode.arc_type else None,
+                        "existing_phase": episode.arc_phase.value if episode.arc_phase else None,
+                        "source_excerpt": (
+                            episode.source_passages[0].text[:500]
+                            if episode.source_passages
+                            else None
+                        ),
+                    }
+                    for episode in window
+                ]
+                scope_name = window[0].scope_name or window[0].scope_id or "unknown"
+                stage_started = time.perf_counter()
+                try:
+                    result = await self.pipeline.reconcile_phases(scope_name, payload)
+                except Exception as exc:
+                    self._record_stage(
+                        session,
+                        source_chunk_id=document_id,
+                        pipeline_stage="phase_reconciliation",
+                        prompt_version="1.0.0",
+                        model_used=self.config.reconciliation_model,
+                        input_data={
+                            "scope": scope_name,
+                            "episode_ids": [item["episode_id"] for item in payload],
+                        },
+                        output_data={},
+                        processing_time_ms=self._elapsed_ms(stage_started),
+                        error_message=str(exc),
+                    )
+                    self.logger.warning(
+                        "Document phase reconciliation unavailable",
+                        scope=scope_name,
+                        error=str(exc),
+                    )
+                    continue
+                if not isinstance(result, dict):
+                    continue
+                self._record_stage(
+                    session,
+                    source_chunk_id=document_id,
+                    pipeline_stage="phase_reconciliation",
+                    prompt_version="1.0.0",
+                    model_used=self.config.reconciliation_model,
+                    input_data={
+                        "scope": scope_name,
+                        "episode_ids": [item["episode_id"] for item in payload],
+                    },
+                    output_data=result,
+                    processing_time_ms=self._elapsed_ms(stage_started),
+                )
+
+                by_id = {str(episode.id): episode for episode in window}
+                assignments = result.get("episodes")
+                if not isinstance(assignments, list):
+                    continue
+                for assignment in assignments:
+                    if not isinstance(assignment, dict):
+                        continue
+                    episode = by_id.get(str(assignment.get("episode_id")))
+                    confidence = self._bounded_confidence(assignment.get("confidence"), 0.0) or 0.0
+                    if episode is None or confidence < self.config.classification_confidence_floor:
+                        continue
+                    try:
+                        arc_type = ArcType(assignment.get("arc_type"))
+                        arc_phase = _parse_arc_phase(assignment.get("arc_phase"))
+                    except (TypeError, ValueError):
+                        continue
+
+                    episode.arc_type = arc_type
+                    episode.arc_phase = arc_phase
+                    episode.phase_confidence = confidence
+                    reason = assignment.get("reason")
+                    if isinstance(reason, str) and reason.strip():
+                        episode.arc_rationale = f"Document reconciliation: {reason.strip()}"
+                    episode.classification_state = ClassificationState.CLASSIFIED
+
+                    orm = await session.get(EpisodeORM, episode.id)
+                    if orm is None:
+                        continue
+                    orm.arc_type = episode.arc_type
+                    orm.arc_phase = episode.arc_phase
+                    orm.phase_confidence = episode.phase_confidence
+                    orm.arc_rationale = episode.arc_rationale
+                    orm.classification_state = episode.classification_state.value
+                    if all(existing.id != episode.id for existing in updated):
+                        updated.append(episode)
+
+        return updated
+
+    async def link_document_candidates(
+        self,
+        chunk_ids: List[str],
+        session: AsyncSession,
+    ) -> int:
+        """Link new episodes to plausible same-scope episodes in the corpus."""
+        if not self.config.enable_linking or self.config.cross_link_max_pairs == 0:
+            return 0
+
+        from sqlalchemy import and_, or_, select
+        from sqlalchemy.orm import selectinload
+
+        from narrative_engine.storage.orm_models import EpisodeLinkORM, EpisodeORM
+        from narrative_engine.storage.repositories import EpisodeRepository
+
+        repository = EpisodeRepository(session)
+        new_episodes = await repository.get_for_chunks(chunk_ids)
+        attempted: set[frozenset] = set()
+        linked = 0
+        calls = 0
+
+        for source in new_episodes:
+            if calls >= self.config.cross_link_max_pairs:
+                break
+            if not source.scope_id and not source.scope_name:
+                continue
+
+            scope_filter = (
+                or_(
+                    EpisodeORM.scope_id == source.scope_id,
+                    EpisodeORM.scope_name == source.scope_name,
+                )
+                if source.scope_id and source.scope_name
+                else (
+                    EpisodeORM.scope_id == source.scope_id
+                    if source.scope_id
+                    else EpisodeORM.scope_name == source.scope_name
+                )
+            )
+            result = await session.execute(
+                select(EpisodeORM)
+                .where(EpisodeORM.id != source.id, scope_filter)
+                .options(
+                    selectinload(EpisodeORM.actors),
+                    selectinload(EpisodeORM.source_passages),
+                )
+                .limit(100)
+            )
+            candidates = [repository._from_orm(orm) for orm in result.scalars().unique().all()]
+            candidates = [
+                candidate
+                for candidate in candidates
+                if not set(source.extracted_from) & set(candidate.extracted_from)
+                and self._is_link_candidate(source, candidate, distance=10_000)
+            ]
+            candidates.sort(
+                key=lambda candidate: self._cross_link_candidate_score(source, candidate),
+                reverse=True,
+            )
+
+            for candidate in candidates[:3]:
+                if calls >= self.config.cross_link_max_pairs:
+                    break
+                pair = frozenset((source.id, candidate.id))
+                if pair in attempted:
+                    continue
+                attempted.add(pair)
+
+                existing = await session.execute(
+                    select(EpisodeLinkORM.id)
+                    .where(
+                        or_(
+                            and_(
+                                EpisodeLinkORM.source_episode_id == source.id,
+                                EpisodeLinkORM.target_episode_id == candidate.id,
+                            ),
+                            and_(
+                                EpisodeLinkORM.source_episode_id == candidate.id,
+                                EpisodeLinkORM.target_episode_id == source.id,
+                            ),
+                        )
+                    )
+                    .limit(1)
+                )
+                if existing.scalar_one_or_none() is not None:
+                    continue
+
+                source_year = self._episode_start_year_value(source)
+                candidate_year = self._episode_start_year_value(candidate)
+                first, second = source, candidate
+                if (
+                    source_year is not None
+                    and candidate_year is not None
+                    and candidate_year < source_year
+                ):
+                    first, second = candidate, source
+                calls += 1
+                try:
+                    linked += int(await self._link_episode_pair(first, second, session))
+                except Exception as exc:
+                    self.logger.warning(
+                        "Cross-document linking candidate failed",
+                        source=first.title,
+                        target=second.title,
+                        error=str(exc),
+                    )
+
+        self.logger.info(
+            "Cross-document linking complete",
+            candidates_checked=calls,
+            links_created=linked,
+        )
+        return linked
 
     async def _store_episodes(
         self,
@@ -549,24 +1243,82 @@ class ExtractionOrchestrator:
         source: Episode,
         target: Episode,
         session: AsyncSession,
-    ) -> None:
+    ) -> bool:
         """Persist a supported identity/causal relationship for one pair."""
         from narrative_engine.storage.orm_models import EpisodeLinkORM
 
-        result = await self.pipeline.link(source.model_dump(mode="json"), target.model_dump(mode="json"))
+        stage_started = time.perf_counter()
+        try:
+            result = await self.pipeline.link(
+                source.model_dump(mode="json"),
+                target.model_dump(mode="json"),
+            )
+        except Exception as exc:
+            self._record_stage(
+                session,
+                source_chunk_id=self._episode_source_chunk(source),
+                pipeline_stage="linking",
+                prompt_version="1.0.0",
+                model_used=self.config.linking_model,
+                input_data={
+                    "source_episode_id": str(source.id),
+                    "target_episode_id": str(target.id),
+                },
+                output_data={},
+                processing_time_ms=self._elapsed_ms(stage_started),
+                error_message=str(exc),
+            )
+            raise
+        if not isinstance(result, dict):
+            return False
+        self._record_stage(
+            session,
+            source_chunk_id=self._episode_source_chunk(source),
+            pipeline_stage="linking",
+            prompt_version="1.0.0",
+            model_used=self.config.linking_model,
+            input_data={
+                "source_episode_id": str(source.id),
+                "target_episode_id": str(target.id),
+            },
+            output_data=result,
+            confidence=self._bounded_confidence(result.get("confidence")),
+            processing_time_ms=self._elapsed_ms(stage_started),
+        )
         relationship = result.get("relationship")
         if relationship not in {"same_event", "causes", "caused_by"}:
-            return
+            return False
         if float(result.get("confidence", 0.0)) < 0.5:
-            return
+            return False
 
         evidence = result.get("evidence_quote")
         if relationship in {"causes", "caused_by"} and not evidence:
-            raise ValueError("Causal link requires a verbatim evidence quote")
+            self.logger.warning(
+                "Rejected unsupported causal link",
+                source=source.title,
+                target=target.title,
+                reason="missing evidence quote",
+            )
+            return False
         if evidence:
-            supplied_text = "\n".join((source.title, source.summary, target.title, target.summary))
+            supplied_text = "\n".join(
+                [
+                    source.title,
+                    source.summary,
+                    *(passage.text for passage in source.source_passages),
+                    target.title,
+                    target.summary,
+                    *(passage.text for passage in target.source_passages),
+                ]
+            )
             if evidence not in supplied_text:
-                raise ValueError("Evidence quote is not present in the supplied episode text")
+                self.logger.warning(
+                    "Rejected unsupported episode link",
+                    source=source.title,
+                    target=target.title,
+                    reason="evidence quote not present in source passages",
+                )
+                return False
 
         source_id, target_id = source.id, target.id
         if relationship == "caused_by":
@@ -583,6 +1335,7 @@ class ExtractionOrchestrator:
             )
         )
         await session.flush()
+        return True
 
     def _is_link_candidate(self, source: Episode, target: Episode, distance: int) -> bool:
         """Cheap, conservative gate before pairwise LLM relationship checks."""
@@ -610,6 +1363,39 @@ class ExtractionOrchestrator:
         shared_terms = source_terms & target_terms
         overlap = len(shared_terms) / min(len(source_terms), len(target_terms))
         return len(shared_terms) >= 2 and overlap >= self.config.linking_min_lexical_overlap
+
+    @staticmethod
+    def _episode_start_year_value(episode: Episode) -> Optional[int]:
+        if episode.start_year is not None:
+            return episode.start_year
+        return episode.start_date.year if episode.start_date else None
+
+    def _cross_link_candidate_score(self, source: Episode, target: Episode) -> float:
+        """Rank already-prefiltered pairs before spending a linking call."""
+        source_terms = self._link_terms(self._episode_link_text(source))
+        target_terms = self._link_terms(self._episode_link_text(target))
+        union = source_terms | target_terms
+        lexical = len(source_terms & target_terms) / len(union) if union else 0.0
+
+        source_actors = {self._normalize_link_value(actor.name) for actor in source.actors}
+        target_actors = {self._normalize_link_value(actor.name) for actor in target.actors}
+        actor_union = (source_actors | target_actors) - {""}
+        actor_overlap = (
+            len((source_actors & target_actors) - {""}) / len(actor_union)
+            if actor_union
+            else 0.0
+        )
+
+        year_gap = self._episode_year_gap(source, target)
+        temporal = (
+            max(0.0, 1.0 - year_gap / max(1.0, self.config.linking_max_year_gap))
+            if year_gap is not None
+            else 0.0
+        )
+        title_match = float(
+            self._normalize_link_value(source.title) == self._normalize_link_value(target.title)
+        )
+        return title_match + 0.4 * lexical + 0.35 * actor_overlap + 0.25 * temporal
 
     @staticmethod
     def _normalize_link_value(value: Optional[str]) -> str:
@@ -645,19 +1431,30 @@ class ExtractionOrchestrator:
     @staticmethod
     def _episode_year_gap(source: Episode, target: Episode) -> Optional[float]:
         """Return zero for overlapping intervals, otherwise years between them."""
-        if source.start_date is None or target.start_date is None:
+        if source.start_date is not None and target.start_date is not None:
+            source_start = source.start_date.date()
+            source_end = (source.end_date or source.start_date).date()
+            target_start = target.start_date.date()
+            target_end = (target.end_date or target.start_date).date()
+            if source_end < target_start:
+                days = (target_start - source_end).days
+            elif target_end < source_start:
+                days = (source_start - target_end).days
+            else:
+                return 0.0
+            return days / 365.2425
+
+        source_start_year = source.start_year
+        target_start_year = target.start_year
+        if source_start_year is None or target_start_year is None:
             return None
-        source_start = source.start_date.date()
-        source_end = (source.end_date or source.start_date).date()
-        target_start = target.start_date.date()
-        target_end = (target.end_date or target.start_date).date()
-        if source_end < target_start:
-            days = (target_start - source_end).days
-        elif target_end < source_start:
-            days = (source_start - target_end).days
-        else:
-            return 0.0
-        return days / 365.2425
+        source_end_year = source.end_year if source.end_year is not None else source_start_year
+        target_end_year = target.end_year if target.end_year is not None else target_start_year
+        if source_end_year < target_start_year:
+            return float(target_start_year - source_end_year)
+        if target_end_year < source_start_year:
+            return float(source_start_year - target_end_year)
+        return 0.0
 
     async def process_batch(
         self,

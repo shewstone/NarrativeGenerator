@@ -48,7 +48,10 @@ async def test_create_and_retrieve_episode():
         episode = Episode(
             id=uuid.uuid4(),
             title="1929 Stock Market Crash",
-            summary="The collapse of the US stock market in October 1929, marking the beginning of the Great Depression",
+            summary=(
+                "The collapse of the US stock market in October 1929, "
+                "marking the beginning of the Great Depression"
+            ),
             start_date=datetime(1929, 10, 24),
             end_date=datetime(1929, 10, 29),
             date_precision="day",

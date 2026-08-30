@@ -232,6 +232,20 @@ class EpisodeRepository:
         result = await self.session.execute(select(func.count(EpisodeORM.id)))
         return result.scalar() or 0
 
+    async def update_source_temporal_bounds(self, episode: Episode) -> None:
+        """Persist source availability and its conservative event-date cap."""
+        await self.session.execute(
+            update(EpisodeORM)
+            .where(EpisodeORM.id == episode.id)
+            .values(
+                start_date=episode.start_date,
+                end_date=episode.end_date,
+                start_year=episode.start_year,
+                end_year=episode.end_year,
+                source_published_at=episode.source_published_at,
+            )
+        )
+
     async def get_arc_types_for_chunks(self, chunk_ids: Sequence[str]) -> set:
         """Return classified arc types sourced from any of the given chunks."""
         wanted = set(chunk_ids)
@@ -241,6 +255,21 @@ class EpisodeRepository:
             select(EpisodeORM.arc_type, EpisodeORM.extracted_from).where(EpisodeORM.arc_type.is_not(None))
         )
         return {arc_type for arc_type, extracted_from in result.all() if wanted.intersection(extracted_from or [])}
+
+    async def get_for_chunks(self, chunk_ids: Sequence[str]) -> List[Episode]:
+        """Load episodes whose primary provenance chunk is in ``chunk_ids``."""
+        wanted = list(dict.fromkeys(chunk_ids))
+        if not wanted:
+            return []
+        result = await self.session.execute(
+            select(EpisodeORM)
+            .where(EpisodeORM.extracted_from[0].as_string().in_(wanted))
+            .options(
+                selectinload(EpisodeORM.actors),
+                selectinload(EpisodeORM.source_passages),
+            )
+        )
+        return [self._from_orm(orm) for orm in result.scalars().unique().all()]
 
     def _to_orm(self, episode: Episode) -> EpisodeORM:
         """Convert Pydantic model to ORM.
@@ -258,6 +287,8 @@ class EpisodeRepository:
             summary=episode.summary,
             start_date=episode.start_date,
             end_date=episode.end_date,
+            start_year=episode.start_year,
+            end_year=episode.end_year,
             date_precision=episode.date_precision,
             location=episode.location,
             setting_description=episode.setting_description,
@@ -288,6 +319,7 @@ class EpisodeRepository:
             secondary_arcs=episode.secondary_arcs,
             classification_state=episode.classification_state.value,
             extracted_from=episode.extracted_from,
+            source_published_at=episode.source_published_at,
             version=episode.version,
             surface_embedding=episode.surface_embedding,
             structural_embedding=episode.structural_embedding,
@@ -338,6 +370,8 @@ class EpisodeRepository:
             summary=orm.summary,
             start_date=orm.start_date,
             end_date=orm.end_date,
+            start_year=orm.start_year,
+            end_year=orm.end_year,
             date_precision=orm.date_precision,
             location=orm.location,
             setting_description=orm.setting_description,
@@ -395,6 +429,7 @@ class EpisodeRepository:
             if source_passages
             else [],
             extracted_from=orm.extracted_from,
+            source_published_at=orm.source_published_at,
             created_at=orm.created_at,
             updated_at=orm.updated_at,
             version=orm.version,
@@ -411,6 +446,8 @@ class EpisodeRepository:
         orm.summary = episode.summary
         orm.start_date = episode.start_date
         orm.end_date = episode.end_date
+        orm.start_year = episode.start_year
+        orm.end_year = episode.end_year
         orm.location = episode.location
         orm.setting_description = episode.setting_description
         orm.scope_id = episode.scope_id
@@ -439,6 +476,7 @@ class EpisodeRepository:
         orm.arc_rationale = episode.arc_rationale
         orm.secondary_arcs = episode.secondary_arcs
         orm.classification_state = episode.classification_state.value
+        orm.source_published_at = episode.source_published_at
         orm.surface_embedding = episode.surface_embedding
         orm.structural_embedding = episode.structural_embedding
         orm.version = episode.version + 1
@@ -745,9 +783,43 @@ class ScopeRepository:
 
             registry = get_registry()
 
-        # Parents must exist before children; a boolean parent-first sort only
-        # handled one level and breaks for faction -> party -> polity trees.
+        # PostgreSQL is the production database.  A single ON CONFLICT
+        # statement makes simultaneous API/worker startup safe: the previous
+        # get-then-insert loop could race and fail one process with a unique
+        # constraint violation while a new registry version was being synced.
         scopes = sorted(registry.all(), key=lambda scope: len(registry.lineage(scope.id)))
+        if self.session.get_bind().dialect.name == "postgresql":
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+            values = [
+                {
+                    "id": scope.id,
+                    "kind": scope.kind,
+                    "name": scope.name,
+                    "parent_scope_id": scope.parent_scope_id,
+                    "aliases": list(scope.aliases),
+                    "notes": scope.notes,
+                }
+                for scope in scopes
+            ]
+            statement = pg_insert(ScopeORM).values(values)
+            statement = statement.on_conflict_do_update(
+                index_elements=[ScopeORM.id],
+                set_={
+                    "kind": statement.excluded.kind,
+                    "name": statement.excluded.name,
+                    "parent_scope_id": statement.excluded.parent_scope_id,
+                    "aliases": statement.excluded.aliases,
+                    "notes": statement.excluded.notes,
+                },
+            )
+            await self.session.execute(statement)
+            await self.session.flush()
+            return len(scopes)
+
+        # Keep the portable path for SQLite-backed unit tests. Parents must
+        # exist before children; a boolean parent-first sort only handled one
+        # level and breaks for faction -> party -> polity trees.
         for scope in scopes:
             existing = await self.session.get(ScopeORM, scope.id)
             if existing:

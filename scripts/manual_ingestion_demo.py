@@ -60,7 +60,10 @@ async def ingest_design_document():
         episode_1929 = Episode(
             id=uuid.uuid4(),
             title="1929 Stock Market Crash",
-            summary="The collapse of the US stock market in October 1929, marking the beginning of the Great Depression. Instantiated the credit-boom-and-bust arc with clear phase progression.",
+            summary=(
+                "The collapse of the US stock market in October 1929, marking the beginning of the Great Depression. "
+                "Instantiated the credit-boom-and-bust arc with clear phase progression."
+            ),
             start_date=datetime(1929, 10, 24),
             end_date=datetime(1932, 7, 8),  # Market bottom
             date_precision="day",
@@ -98,7 +101,10 @@ async def ingest_design_document():
         episode_weimar = Episode(
             id=uuid.uuid4(),
             title="Weimar Hyperinflation",
-            summary="German currency collapse following WWI reparations and Ruhr occupation. Demonstrates fiscal distress mechanism.",
+            summary=(
+                "German currency collapse following WWI reparations and Ruhr occupation. "
+                "Demonstrates fiscal distress mechanism."
+            ),
             start_date=datetime(1921, 1, 1),
             end_date=datetime(1923, 11, 15),  # Rentenmark introduced
             date_precision="month",

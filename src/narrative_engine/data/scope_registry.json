@@ -1,5 +1,5 @@
 {
-  "version": "scope-v0.2.0",
+  "version": "scope-v0.7.6",
   "_comment": "Versioned scope registry (T5, design doc Sec 4/Sec 9). Scope boundaries are contested claims: entries are hypotheses, not ontology. Bump `version` on any change; unresolved raw strings logged by the resolver are the promotion queue for new aliases.",
   "scopes": [
     {
@@ -30,7 +30,9 @@
       "name": "Sinosphere",
       "aliases": [
         "East Asia",
-        "Sinic civilization"
+        "Sinic civilization",
+        "Chinese civilization",
+        "Chinese world"
       ]
     },
     {
@@ -42,6 +44,1335 @@
         "Ancient Greece",
         "Greece",
         "Greek world"
+      ]
+    },
+    {
+      "id": "greek_revolution",
+      "kind": "movement",
+      "name": "Greek Revolution",
+      "parent_scope_id": "hellenic",
+      "aliases": [
+        "Greek War of Independence"
+      ]
+    },
+    {
+      "id": "egyptian_civilization",
+      "kind": "civilization",
+      "name": "Egyptian Civilization",
+      "parent_scope_id": "africa",
+      "aliases": [
+        "Ancient Egypt",
+        "Egyptians",
+        "Ancient Egyptian civilization"
+      ],
+      "notes": "A deliberately long-duration civilizational scope for the historical-corpus pilot; narrower dynastic scopes remain valid focal subjects."
+    },
+    {
+      "id": "south_asia",
+      "kind": "civilization",
+      "name": "South Asian Civilization",
+      "aliases": [
+        "Indian civilization",
+        "Indian subcontinent"
+      ]
+    },
+    {
+      "id": "india",
+      "kind": "polity",
+      "name": "India",
+      "parent_scope_id": "south_asia",
+      "aliases": [
+        "Republic of India",
+        "Government of India"
+      ]
+    },
+    {
+      "id": "bharatiya_janata_party",
+      "kind": "party",
+      "name": "Bharatiya Janata Party",
+      "parent_scope_id": "india",
+      "aliases": [
+        "BJP",
+        "Indian People's Party"
+      ]
+    },
+    {
+      "id": "indian_national_congress",
+      "kind": "party",
+      "name": "Indian National Congress",
+      "parent_scope_id": "india",
+      "aliases": [
+        "Congress Party",
+        "Congress (I)",
+        "Congress(I)"
+      ]
+    },
+    {
+      "id": "africa",
+      "kind": "region",
+      "name": "Africa",
+      "aliases": [
+        "African continent",
+        "African civilizations"
+      ]
+    },
+    {
+      "id": "west_africa",
+      "kind": "region",
+      "name": "West Africa",
+      "parent_scope_id": "africa",
+      "aliases": [
+        "Western Africa",
+        "West African civilizations"
+      ]
+    },
+    {
+      "id": "nigeria",
+      "kind": "polity",
+      "name": "Nigeria",
+      "parent_scope_id": "west_africa",
+      "aliases": [
+        "Federal Republic of Nigeria",
+        "Nigerian state",
+        "First Republic of Nigeria",
+        "Second Republic of Nigeria"
+      ]
+    },
+    {
+      "id": "nigerian_military_regimes",
+      "kind": "faction",
+      "name": "Nigerian Military Regimes",
+      "parent_scope_id": "nigeria",
+      "aliases": [
+        "Nigerian military federalism",
+        "Babangida regime"
+      ]
+    },
+    {
+      "id": "nigerian_nationalist_movement",
+      "kind": "movement",
+      "name": "Nigerian Nationalist Movement",
+      "parent_scope_id": "nigeria",
+      "aliases": [
+        "Nigerian nationalist movement",
+        "Nigerian Regional Political Parties"
+      ]
+    },
+    {
+      "id": "nigerian_peoples_congress",
+      "kind": "party",
+      "name": "Northern People's Congress",
+      "parent_scope_id": "nigeria",
+      "aliases": [
+        "NPC",
+        "Northern Peoples Congress"
+      ]
+    },
+    {
+      "id": "nigerian_ncnc",
+      "kind": "party",
+      "name": "National Council of Nigeria and the Cameroons",
+      "parent_scope_id": "nigeria",
+      "aliases": [
+        "NCNC",
+        "National Council of Nigerian Citizens"
+      ]
+    },
+    {
+      "id": "nigerian_action_group",
+      "kind": "party",
+      "name": "Action Group of Nigeria",
+      "parent_scope_id": "nigeria",
+      "aliases": [
+        "Nigerian Action Group",
+        "AG Nigeria"
+      ]
+    },
+    {
+      "id": "nigerian_peoples_democratic_party",
+      "kind": "party",
+      "name": "People's Democratic Party of Nigeria",
+      "parent_scope_id": "nigeria",
+      "aliases": [
+        "Nigerian PDP",
+        "PDP Nigeria"
+      ]
+    },
+    {
+      "id": "southern_africa",
+      "kind": "region",
+      "name": "Southern Africa",
+      "parent_scope_id": "africa",
+      "aliases": [
+        "South African region",
+        "Southern African societies"
+      ]
+    },
+    {
+      "id": "south_africa",
+      "kind": "polity",
+      "name": "South Africa",
+      "parent_scope_id": "southern_africa",
+      "aliases": [
+        "Republic of South Africa"
+      ]
+    },
+    {
+      "id": "african_national_congress",
+      "kind": "party",
+      "name": "African National Congress",
+      "parent_scope_id": "south_africa",
+      "aliases": [
+        "ANC"
+      ]
+    },
+    {
+      "id": "south_african_national_party",
+      "kind": "party",
+      "name": "National Party of South Africa",
+      "parent_scope_id": "south_africa",
+      "aliases": [
+        "National Party",
+        "South African National Party"
+      ]
+    },
+    {
+      "id": "north_africa",
+      "kind": "region",
+      "name": "North Africa",
+      "parent_scope_id": "africa",
+      "aliases": [
+        "Northern Africa",
+        "North African region"
+      ]
+    },
+    {
+      "id": "egypt",
+      "kind": "polity",
+      "name": "Egypt",
+      "parent_scope_id": "north_africa",
+      "aliases": [
+        "Modern Egypt",
+        "Republic of Egypt",
+        "Arab Republic of Egypt",
+        "Egyptian state"
+      ]
+    },
+    {
+      "id": "egyptian_nationalist_movement",
+      "kind": "movement",
+      "name": "Egyptian Nationalist Movement",
+      "parent_scope_id": "egypt",
+      "aliases": [
+        "Egyptian nationalist movement",
+        "Egyptian national movement"
+      ]
+    },
+    {
+      "id": "egyptian_free_officers",
+      "kind": "movement",
+      "name": "Egyptian Free Officers",
+      "parent_scope_id": "egypt",
+      "aliases": [
+        "Free Officers Movement",
+        "Free Officers"
+      ]
+    },
+    {
+      "id": "egyptian_wafd_party",
+      "kind": "party",
+      "name": "Wafd Party",
+      "parent_scope_id": "egypt",
+      "aliases": [
+        "Wafd",
+        "New Wafd Party"
+      ]
+    },
+    {
+      "id": "muslim_brotherhood_egypt",
+      "kind": "movement",
+      "name": "Muslim Brotherhood in Egypt",
+      "parent_scope_id": "egypt",
+      "aliases": [
+        "Egyptian Muslim Brotherhood",
+        "Society of the Muslim Brothers"
+      ]
+    },
+    {
+      "id": "egyptian_national_democratic_party",
+      "kind": "party",
+      "name": "Egyptian National Democratic Party",
+      "parent_scope_id": "egypt",
+      "aliases": [
+        "National Democratic Party of Egypt",
+        "Egyptian NDP"
+      ]
+    },
+    {
+      "id": "east_africa",
+      "kind": "region",
+      "name": "East Africa",
+      "parent_scope_id": "africa",
+      "aliases": [
+        "Eastern Africa",
+        "East African region"
+      ]
+    },
+    {
+      "id": "central_africa",
+      "kind": "region",
+      "name": "Central Africa",
+      "parent_scope_id": "africa",
+      "aliases": [
+        "Central African region"
+      ]
+    },
+    {
+      "id": "bantu_peoples",
+      "kind": "civilization",
+      "name": "Bantu Peoples",
+      "parent_scope_id": "africa",
+      "aliases": [
+        "Bantu",
+        "Bantu peoples"
+      ]
+    },
+    {
+      "id": "berbers",
+      "kind": "group",
+      "name": "Berbers",
+      "parent_scope_id": "north_africa",
+      "aliases": [
+        "Berber peoples",
+        "Amazigh"
+      ]
+    },
+    {
+      "id": "carthage",
+      "kind": "polity",
+      "name": "Carthage",
+      "parent_scope_id": "north_africa",
+      "aliases": [
+        "Carthaginian Empire",
+        "Carthaginian state"
+      ]
+    },
+    {
+      "id": "zulu_kingdom",
+      "kind": "polity",
+      "name": "Zulu Kingdom",
+      "parent_scope_id": "southern_africa",
+      "aliases": [
+        "Zulu",
+        "Zulus",
+        "Zulu nation",
+        "Zulu people",
+        "AmaZulu"
+      ]
+    },
+    {
+      "id": "cetshwayo",
+      "kind": "person",
+      "name": "Cetshwayo",
+      "parent_scope_id": "zulu_kingdom",
+      "aliases": [
+        "Cetewayo",
+        "King Cetshwayo"
+      ]
+    },
+    {
+      "id": "natal_colony",
+      "kind": "polity",
+      "name": "Colony of Natal",
+      "parent_scope_id": "southern_africa",
+      "aliases": [
+        "Natal Colony",
+        "British Natal"
+      ]
+    },
+    {
+      "id": "cape_colony",
+      "kind": "polity",
+      "name": "Cape Colony",
+      "parent_scope_id": "southern_africa",
+      "aliases": [
+        "Cape of Good Hope Colony"
+      ]
+    },
+    {
+      "id": "boers",
+      "kind": "group",
+      "name": "Boers",
+      "parent_scope_id": "southern_africa",
+      "aliases": [
+        "The Boers",
+        "Dutch Settlers / Boers",
+        "Boer people"
+      ]
+    },
+    {
+      "id": "south_african_republic",
+      "kind": "polity",
+      "name": "South African Republic",
+      "parent_scope_id": "southern_africa",
+      "aliases": [
+        "Transvaal",
+        "Transvaal Republic",
+        "South African Republic (Transvaal)"
+      ]
+    },
+    {
+      "id": "german_southwest_africa",
+      "kind": "polity",
+      "name": "German South West Africa",
+      "parent_scope_id": "southern_africa",
+      "aliases": [
+        "German South-west Africa",
+        "German Southwest Africa"
+      ]
+    },
+    {
+      "id": "ashanti_empire",
+      "kind": "polity",
+      "name": "Ashanti Empire",
+      "parent_scope_id": "west_africa",
+      "aliases": [
+        "Ashanti",
+        "Asante",
+        "Ashanti Confederacy",
+        "Asante Empire",
+        "Kingdom of Ashanti"
+      ]
+    },
+    {
+      "id": "hausa_states",
+      "kind": "polity",
+      "name": "Hausa States",
+      "parent_scope_id": "west_africa",
+      "aliases": [
+        "Hausa states",
+        "Hausa kingdoms",
+        "Hausaland"
+      ]
+    },
+    {
+      "id": "liberia",
+      "kind": "polity",
+      "name": "Liberia",
+      "parent_scope_id": "west_africa",
+      "aliases": [
+        "Republic of Liberia"
+      ]
+    },
+    {
+      "id": "gold_coast_colony",
+      "kind": "polity",
+      "name": "Gold Coast Colony",
+      "parent_scope_id": "west_africa",
+      "aliases": [
+        "British Gold Coast"
+      ]
+    },
+    {
+      "id": "royal_niger_company",
+      "kind": "organization",
+      "name": "Royal Niger Company",
+      "parent_scope_id": "west_africa",
+      "aliases": [
+        "Royal Niger Company territories"
+      ]
+    },
+    {
+      "id": "french_west_africa",
+      "kind": "polity",
+      "name": "French West Africa",
+      "parent_scope_id": "west_africa",
+      "aliases": [
+        "Afrique-Occidentale française"
+      ]
+    },
+    {
+      "id": "congo_free_state",
+      "kind": "polity",
+      "name": "Congo Free State",
+      "parent_scope_id": "central_africa",
+      "aliases": [
+        "Independent State of the Congo"
+      ]
+    },
+    {
+      "id": "german_east_africa",
+      "kind": "polity",
+      "name": "German East Africa",
+      "parent_scope_id": "east_africa",
+      "aliases": [
+        "German East African colony"
+      ]
+    },
+    {
+      "id": "portuguese_east_africa",
+      "kind": "polity",
+      "name": "Portuguese East Africa",
+      "parent_scope_id": "east_africa",
+      "aliases": [
+        "Portuguese Mozambique"
+      ]
+    },
+    {
+      "id": "uganda_protectorate",
+      "kind": "polity",
+      "name": "Uganda Protectorate",
+      "parent_scope_id": "east_africa",
+      "aliases": [
+        "British Uganda"
+      ]
+    },
+    {
+      "id": "anglo_egyptian_sudan",
+      "kind": "polity",
+      "name": "Anglo-Egyptian Sudan",
+      "parent_scope_id": "east_africa",
+      "aliases": [
+        "Anglo-Egyptian Sudan"
+      ]
+    },
+    {
+      "id": "madagascar",
+      "kind": "polity",
+      "name": "Madagascar",
+      "parent_scope_id": "africa",
+      "aliases": [
+        "Malagasy kingdom"
+      ]
+    },
+    {
+      "id": "mesoamerica",
+      "kind": "civilization",
+      "name": "Mesoamerican Civilization",
+      "aliases": [
+        "Mesoamerica",
+        "Mesoamerican civilizations",
+        "Ancient Mexico",
+        "Pre-Spanish Mexican and Mayan culture"
+      ]
+    },
+    {
+      "id": "andean",
+      "kind": "civilization",
+      "name": "Andean Civilization",
+      "aliases": [
+        "Andes",
+        "Andean civilizations",
+        "Ancient Peru"
+      ]
+    },
+    {
+      "id": "islamicate",
+      "kind": "civilization",
+      "name": "Islamicate Civilization",
+      "aliases": [
+        "Islamic civilization",
+        "Muslim world",
+        "Islamic world",
+        "Islam",
+        "Islām"
+      ]
+    },
+    {
+      "id": "central_asia",
+      "kind": "region",
+      "name": "Central Asia",
+      "aliases": [
+        "Turkestan",
+        "Central Asian region",
+        "Central Asian Khanates"
+      ]
+    },
+    {
+      "id": "mongol_empire",
+      "kind": "polity",
+      "name": "Mongol Empire",
+      "parent_scope_id": "central_asia",
+      "aliases": [
+        "Mongols",
+        "Mongol nation",
+        "Mongol state",
+        "Empire of Genghis Khan"
+      ]
+    },
+    {
+      "id": "genghis_khan",
+      "kind": "person",
+      "name": "Genghis Khan",
+      "parent_scope_id": "mongol_empire",
+      "aliases": [
+        "Temudjin",
+        "Temüjin",
+        "Jinghis Khan",
+        "Chingiz Khan",
+        "Chingiz Khān",
+        "Chinggis Khan"
+      ]
+    },
+    {
+      "id": "chagatai_khanate",
+      "kind": "polity",
+      "name": "Chagatai Khanate",
+      "parent_scope_id": "mongol_empire",
+      "aliases": [
+        "Chaghatay Khanate",
+        "Chaghatāy Khānate"
+      ]
+    },
+    {
+      "id": "yuezhi",
+      "kind": "group",
+      "name": "Yuezhi",
+      "parent_scope_id": "central_asia",
+      "aliases": [
+        "Yué-Chi",
+        "Yue-Chi"
+      ]
+    },
+    {
+      "id": "khwarezmian_empire",
+      "kind": "polity",
+      "name": "Khwarezmian Empire",
+      "parent_scope_id": "central_asia",
+      "aliases": [
+        "Kwaresmian Empire",
+        "Khwarazmian Empire",
+        "Khwārazm-Shāhs",
+        "Khwarezm-Shahs"
+      ]
+    },
+    {
+      "id": "jalal_al_din_mingburnu",
+      "kind": "person",
+      "name": "Jalal al-Din Mingburnu",
+      "parent_scope_id": "khwarezmian_empire",
+      "aliases": [
+        "Jelal ud din",
+        "Jelal",
+        "Jalal ad-Din Mingburnu"
+      ]
+    },
+    {
+      "id": "samanid_empire",
+      "kind": "polity",
+      "name": "Samanid Empire",
+      "parent_scope_id": "central_asia",
+      "aliases": [
+        "Samanids",
+        "Sāmānides",
+        "Samanid dynasty"
+      ]
+    },
+    {
+      "id": "tekke_turkomans",
+      "kind": "group",
+      "name": "Tekke Turkomans",
+      "parent_scope_id": "central_asia",
+      "aliases": [
+        "Tekke",
+        "Tekke Turkmen"
+      ]
+    },
+    {
+      "id": "golden_horde",
+      "kind": "polity",
+      "name": "Golden Horde",
+      "parent_scope_id": "mongol_empire",
+      "aliases": [
+        "Kipchak Khanate",
+        "Khanate of the Golden Horde"
+      ]
+    },
+    {
+      "id": "timurid_empire",
+      "kind": "polity",
+      "name": "Timurid Empire",
+      "parent_scope_id": "central_asia",
+      "aliases": [
+        "Timur's empire",
+        "Empire of Timur",
+        "Timurid state",
+        "Timurid dynasty"
+      ]
+    },
+    {
+      "id": "timur",
+      "kind": "person",
+      "name": "Timur",
+      "parent_scope_id": "timurid_empire",
+      "aliases": [
+        "Tīmūr",
+        "Tamerlane",
+        "Timur the Lame"
+      ]
+    },
+    {
+      "id": "russian_turkestan",
+      "kind": "polity",
+      "name": "Russian Turkestan",
+      "parent_scope_id": "central_asia",
+      "aliases": [
+        "Russian Central Asia",
+        "Turkestan Governor-Generalship"
+      ]
+    },
+    {
+      "id": "bukhara",
+      "kind": "polity",
+      "name": "Khanate of Bukhara",
+      "parent_scope_id": "central_asia",
+      "aliases": [
+        "Bukhara",
+        "Bokhara",
+        "Emirate of Bukhara",
+        "Emirate of Bokhara"
+      ]
+    },
+    {
+      "id": "khiva",
+      "kind": "polity",
+      "name": "Khanate of Khiva",
+      "parent_scope_id": "central_asia",
+      "aliases": [
+        "Khiva"
+      ]
+    },
+    {
+      "id": "kokand",
+      "kind": "polity",
+      "name": "Khanate of Kokand",
+      "parent_scope_id": "central_asia",
+      "aliases": [
+        "Kokand",
+        "Khokand"
+      ]
+    },
+    {
+      "id": "early_caliphate",
+      "kind": "polity",
+      "name": "Early Caliphate",
+      "parent_scope_id": "islamicate",
+      "aliases": [
+        "Rashidun Caliphate",
+        "Caliphate of Medina",
+        "Rightly Guided Caliphate",
+        "Caliphate of Omar",
+        "Caliphate of Othman",
+        "Islamic Caliphate under Abu Bekr"
+      ]
+    },
+    {
+      "id": "abu_bakr",
+      "kind": "person",
+      "name": "Abu Bakr",
+      "parent_scope_id": "early_caliphate",
+      "aliases": [
+        "Abu Bekr",
+        "Abū Bakr"
+      ]
+    },
+    {
+      "id": "umar_ibn_al_khattab",
+      "kind": "person",
+      "name": "Umar ibn al-Khattab",
+      "parent_scope_id": "early_caliphate",
+      "aliases": [
+        "Omar",
+        "Caliph Omar",
+        "Umar"
+      ]
+    },
+    {
+      "id": "ali_ibn_abi_talib",
+      "kind": "person",
+      "name": "Ali ibn Abi Talib",
+      "parent_scope_id": "early_caliphate",
+      "aliases": [
+        "Aly",
+        "Ali",
+        "Caliph Ali"
+      ]
+    },
+    {
+      "id": "khalid_ibn_al_walid",
+      "kind": "person",
+      "name": "Khalid ibn al-Walid",
+      "parent_scope_id": "early_caliphate",
+      "aliases": [
+        "Khâlid ibn al-Walîd",
+        "Khalid",
+        "Khâlid"
+      ]
+    },
+    {
+      "id": "muthanna_ibn_haritha",
+      "kind": "person",
+      "name": "Al-Muthanna ibn Haritha",
+      "parent_scope_id": "early_caliphate",
+      "aliases": [
+        "Mothanna",
+        "Al-Muthanna"
+      ]
+    },
+    {
+      "id": "umayyad_caliphate",
+      "kind": "polity",
+      "name": "Umayyad Caliphate",
+      "parent_scope_id": "islamicate",
+      "aliases": [
+        "Umayyads",
+        "Omeyyad Caliphate",
+        "Omeyyads",
+        "Omeyyad dynasty"
+      ]
+    },
+    {
+      "id": "qutayba_ibn_muslim",
+      "kind": "person",
+      "name": "Qutayba ibn Muslim",
+      "parent_scope_id": "umayyad_caliphate",
+      "aliases": [
+        "Kutayba",
+        "Kutayba ibn Muslim"
+      ]
+    },
+    {
+      "id": "seljuk_empire",
+      "kind": "polity",
+      "name": "Seljuk Empire",
+      "parent_scope_id": "islamicate",
+      "aliases": [
+        "Seljūk Empire",
+        "Seljuks",
+        "Seljūks",
+        "Seljouk Turks"
+      ]
+    },
+    {
+      "id": "nizari_ismailis",
+      "kind": "group",
+      "name": "Nizari Ismailis",
+      "parent_scope_id": "islamicate",
+      "aliases": [
+        "Nizari Ismailians",
+        "Nizari Ismaili Order",
+        "Nizari Ismaili State",
+        "Nizari Ismaili state",
+        "Ismailian Order",
+        "Ismailians",
+        "Assassin Order"
+      ]
+    },
+    {
+      "id": "mamluk_sultanate",
+      "kind": "polity",
+      "name": "Mamluk Sultanate",
+      "parent_scope_id": "islamicate",
+      "aliases": [
+        "Mamluk Sultanate of Egypt"
+      ]
+    },
+    {
+      "id": "abbasid_caliphate",
+      "kind": "polity",
+      "name": "Abbasid Caliphate",
+      "parent_scope_id": "islamicate",
+      "aliases": [
+        "Abbasids",
+        "Abbasside Caliphate",
+        "Abbassides"
+      ]
+    },
+    {
+      "id": "southeast_asia",
+      "kind": "region",
+      "name": "Southeast Asia",
+      "aliases": [
+        "South-East Asia",
+        "Southeast Asian civilizations"
+      ]
+    },
+    {
+      "id": "indonesia",
+      "kind": "polity",
+      "name": "Indonesia",
+      "parent_scope_id": "southeast_asia",
+      "aliases": [
+        "Republic of Indonesia",
+        "Indonesian state",
+        "Dutch East Indies"
+      ]
+    },
+    {
+      "id": "indonesian_national_party",
+      "kind": "party",
+      "name": "Indonesian National Party",
+      "parent_scope_id": "indonesia",
+      "aliases": [
+        "PNI",
+        "Partai Nasional Indonesia"
+      ]
+    },
+    {
+      "id": "indonesian_communist_party",
+      "kind": "party",
+      "name": "Communist Party of Indonesia",
+      "parent_scope_id": "indonesia",
+      "aliases": [
+        "PKI",
+        "Partai Komunis Indonesia"
+      ]
+    },
+    {
+      "id": "golkar",
+      "kind": "party",
+      "name": "Golkar",
+      "parent_scope_id": "indonesia",
+      "aliases": [
+        "Party of Functional Groups",
+        "Golongan Karya"
+      ]
+    },
+    {
+      "id": "indonesian_democratic_party_struggle",
+      "kind": "party",
+      "name": "Indonesian Democratic Party of Struggle",
+      "parent_scope_id": "indonesia",
+      "aliases": [
+        "PDI-P",
+        "PDI Perjuangan"
+      ]
+    },
+    {
+      "id": "indonesian_new_order",
+      "kind": "faction",
+      "name": "Indonesian New Order",
+      "parent_scope_id": "indonesia",
+      "aliases": [
+        "New Order",
+        "Suharto New Order"
+      ]
+    },
+    {
+      "id": "indonesian_democrat_party",
+      "kind": "party",
+      "name": "Democrat Party of Indonesia",
+      "parent_scope_id": "indonesia",
+      "aliases": [
+        "Democrat Party",
+        "Partai Demokrat"
+      ]
+    },
+    {
+      "id": "indonesian_prosperous_justice_party",
+      "kind": "party",
+      "name": "Prosperous Justice Party",
+      "parent_scope_id": "indonesia",
+      "aliases": [
+        "PKS",
+        "Partai Keadilan Sejahtera"
+      ]
+    },
+    {
+      "id": "thailand",
+      "kind": "polity",
+      "name": "Thailand",
+      "parent_scope_id": "southeast_asia",
+      "aliases": [
+        "Siam",
+        "Kingdom of Siam",
+        "Siamese kingdom",
+        "Thai kingdom"
+      ]
+    },
+    {
+      "id": "sukhothai",
+      "kind": "polity",
+      "name": "Sukhothai Kingdom",
+      "parent_scope_id": "thailand",
+      "aliases": [
+        "Sukhothai",
+        "Sukhothai-Sawankhalok"
+      ]
+    },
+    {
+      "id": "ayutthaya",
+      "kind": "polity",
+      "name": "Ayutthaya Kingdom",
+      "parent_scope_id": "thailand",
+      "aliases": [
+        "Ayutthaya",
+        "Ayuthia",
+        "Ayudhya",
+        "Kingdom of Ayutthaya",
+        "Kingdom of Ayuthia"
+      ]
+    },
+    {
+      "id": "thonburi",
+      "kind": "polity",
+      "name": "Thonburi Kingdom",
+      "parent_scope_id": "thailand",
+      "aliases": [
+        "Thonburi",
+        "Tonburi",
+        "Kingdom of Tonburi"
+      ]
+    },
+    {
+      "id": "burma",
+      "kind": "polity",
+      "name": "Burma",
+      "parent_scope_id": "southeast_asia",
+      "aliases": [
+        "Myanmar",
+        "Burmese kingdom",
+        "Burmese state"
+      ]
+    },
+    {
+      "id": "konbaung_dynasty",
+      "kind": "group",
+      "name": "Konbaung Dynasty",
+      "parent_scope_id": "burma",
+      "aliases": [
+        "Konbaung",
+        "Alompra dynasty"
+      ]
+    },
+    {
+      "id": "shan_states",
+      "kind": "polity",
+      "name": "Shan States",
+      "parent_scope_id": "burma",
+      "aliases": [
+        "Federated Shan States"
+      ]
+    },
+    {
+      "id": "chin_peoples",
+      "kind": "group",
+      "name": "Chin Peoples",
+      "parent_scope_id": "burma",
+      "aliases": [
+        "Chins",
+        "Chin tribes"
+      ]
+    },
+    {
+      "id": "british_burma",
+      "kind": "polity",
+      "name": "British Burma",
+      "parent_scope_id": "burma",
+      "aliases": [
+        "Province of Burma",
+        "British administration in Burma",
+        "British Administration of Burma",
+        "British Administration of Upper Burma",
+        "British Burma Administration",
+        "British colonial administration in Burma",
+        "British colonial administration of Upper Burma"
+      ]
+    },
+    {
+      "id": "cambodia",
+      "kind": "polity",
+      "name": "Cambodia",
+      "parent_scope_id": "southeast_asia",
+      "aliases": [
+        "Camboja",
+        "Kambodia",
+        "Cambodian kingdom",
+        "Kingdom of Cambodia"
+      ]
+    },
+    {
+      "id": "khmer_empire",
+      "kind": "polity",
+      "name": "Khmer Empire",
+      "parent_scope_id": "cambodia",
+      "aliases": [
+        "Angkor",
+        "Angkorian Empire",
+        "Ancient Cambodia"
+      ]
+    },
+    {
+      "id": "tonkin",
+      "kind": "polity",
+      "name": "Tonkin",
+      "parent_scope_id": "southeast_asia",
+      "aliases": [
+        "Đàng Ngoài"
+      ]
+    },
+    {
+      "id": "cochinchina",
+      "kind": "polity",
+      "name": "Cochinchina",
+      "parent_scope_id": "southeast_asia",
+      "aliases": [
+        "Cochin-China",
+        "Kingdom of Cochin-China"
+      ]
+    },
+    {
+      "id": "malay_peoples",
+      "kind": "group",
+      "name": "Malay Peoples",
+      "parent_scope_id": "southeast_asia",
+      "aliases": [
+        "Malays",
+        "Malay people"
+      ]
+    },
+    {
+      "id": "laos",
+      "kind": "polity",
+      "name": "Laos",
+      "parent_scope_id": "southeast_asia",
+      "aliases": [
+        "Lao kingdoms",
+        "Laos country"
+      ]
+    },
+    {
+      "id": "luang_prabang",
+      "kind": "polity",
+      "name": "Kingdom of Luang Prabang",
+      "parent_scope_id": "laos",
+      "aliases": [
+        "Luang Prabang",
+        "Louang Phrabang"
+      ]
+    },
+    {
+      "id": "sumatra",
+      "kind": "region",
+      "name": "Sumatra",
+      "parent_scope_id": "southeast_asia",
+      "aliases": [
+        "Island of Sumatra",
+        "Sumatran societies"
+      ]
+    },
+    {
+      "id": "aceh_sultanate",
+      "kind": "polity",
+      "name": "Aceh Sultanate",
+      "parent_scope_id": "sumatra",
+      "aliases": [
+        "Aceh",
+        "Acheen",
+        "Achin",
+        "Kingdom of Aceh",
+        "Kingdom of Achin",
+        "Sultanate of Achin"
+      ]
+    },
+    {
+      "id": "minangkabau",
+      "kind": "group",
+      "name": "Minangkabau",
+      "parent_scope_id": "sumatra",
+      "aliases": [
+        "Menangkabau",
+        "Minangkabau people"
+      ]
+    },
+    {
+      "id": "rejang",
+      "kind": "group",
+      "name": "Rejang",
+      "parent_scope_id": "sumatra",
+      "aliases": [
+        "Rejang people",
+        "Rejangs",
+        "Redjang"
+      ]
+    },
+    {
+      "id": "sumatran_peoples",
+      "kind": "group",
+      "name": "Sumatran Peoples",
+      "parent_scope_id": "sumatra",
+      "aliases": [
+        "Sumatrans",
+        "Sumatran people"
+      ]
+    },
+    {
+      "id": "batak",
+      "kind": "group",
+      "name": "Batak",
+      "parent_scope_id": "sumatra",
+      "aliases": [
+        "Batta",
+        "Battas",
+        "Batak people"
+      ]
+    },
+    {
+      "id": "minangkabau_kingdom",
+      "kind": "polity",
+      "name": "Minangkabau Kingdom",
+      "parent_scope_id": "sumatra",
+      "aliases": [
+        "Menangkabau Empire",
+        "Menangkabau empire",
+        "Sultanate of Menangkabau"
+      ]
+    },
+    {
+      "id": "oceania",
+      "kind": "region",
+      "name": "Oceania",
+      "aliases": [
+        "Pacific Islands",
+        "Pacific region",
+        "Pacific Islands region"
+      ]
+    },
+    {
+      "id": "latin_america",
+      "kind": "region",
+      "name": "Latin America",
+      "aliases": [
+        "Latin American region",
+        "Ibero-America"
+      ]
+    },
+    {
+      "id": "brazil",
+      "kind": "polity",
+      "name": "Brazil",
+      "parent_scope_id": "latin_america",
+      "aliases": [
+        "Federative Republic of Brazil",
+        "Brazilian Empire",
+        "Empire of Brazil",
+        "Brazilian Republic"
+      ]
+    },
+    {
+      "id": "brazilian_workers_party",
+      "kind": "party",
+      "name": "Workers' Party of Brazil",
+      "parent_scope_id": "brazil",
+      "aliases": [
+        "Brazilian Workers' Party",
+        "Partido dos Trabalhadores",
+        "PT Brazil"
+      ]
+    },
+    {
+      "id": "brazilian_democratic_movement",
+      "kind": "party",
+      "name": "Brazilian Democratic Movement",
+      "parent_scope_id": "brazil",
+      "aliases": [
+        "MDB",
+        "PMDB",
+        "Brazilian Democratic Movement Party"
+      ]
+    },
+    {
+      "id": "brazilian_military_government",
+      "kind": "faction",
+      "name": "Brazilian Military Government",
+      "parent_scope_id": "brazil",
+      "aliases": [
+        "Brazilian military regime",
+        "Brazilian military dictatorship"
+      ]
+    },
+    {
+      "id": "brazilian_armed_forces",
+      "kind": "institution",
+      "name": "Brazilian Armed Forces",
+      "parent_scope_id": "brazil",
+      "aliases": [
+        "Brazilian Army",
+        "Brazilian military",
+        "Brazilian Military Officer Corps"
+      ]
+    },
+    {
+      "id": "mexico",
+      "kind": "polity",
+      "name": "Mexico",
+      "parent_scope_id": "latin_america",
+      "aliases": [
+        "United Mexican States",
+        "Mexican Republic",
+        "Mexican state"
+      ]
+    },
+    {
+      "id": "mexican_institutional_revolutionary_party",
+      "kind": "party",
+      "name": "Institutional Revolutionary Party",
+      "parent_scope_id": "mexico",
+      "aliases": [
+        "PRI",
+        "PNR/PRM/PRI",
+        "Partido Revolucionario Institucional"
+      ]
+    },
+    {
+      "id": "mexican_national_action_party",
+      "kind": "party",
+      "name": "National Action Party of Mexico",
+      "parent_scope_id": "mexico",
+      "aliases": [
+        "PAN Mexico",
+        "Partido Accion Nacional"
+      ]
+    },
+    {
+      "id": "mexican_democratic_revolution_party",
+      "kind": "party",
+      "name": "Party of the Democratic Revolution",
+      "parent_scope_id": "mexico",
+      "aliases": [
+        "PRD Mexico",
+        "PRD",
+        "Partido de la Revolucion Democratica"
+      ]
+    },
+    {
+      "id": "mexican_revolution",
+      "kind": "movement",
+      "name": "Mexican Revolution",
+      "parent_scope_id": "mexico",
+      "aliases": [
+        "Mexican revolutionary movement",
+        "Mexican Revolution of 1910"
+      ]
+    },
+    {
+      "id": "north_america",
+      "kind": "region",
+      "name": "North America",
+      "aliases": [
+        "North American continent"
+      ]
+    },
+    {
+      "id": "indigenous_north_america",
+      "kind": "civilization",
+      "name": "Indigenous North America",
+      "parent_scope_id": "north_america",
+      "aliases": [
+        "Indigenous peoples of North America",
+        "Native Americans",
+        "American Indians",
+        "Indians of North America"
       ]
     },
     {
@@ -61,6 +1392,78 @@
       ]
     },
     {
+      "id": "us_democratic_party",
+      "kind": "party",
+      "name": "Democratic Party of the United States",
+      "parent_scope_id": "us",
+      "aliases": [
+        "Democratic Party",
+        "U.S. Democratic Party",
+        "US Democrats"
+      ]
+    },
+    {
+      "id": "us_republican_party",
+      "kind": "party",
+      "name": "Republican Party of the United States",
+      "parent_scope_id": "us",
+      "aliases": [
+        "Republican Party",
+        "U.S. Republican Party",
+        "GOP"
+      ]
+    },
+    {
+      "id": "us_progressive_movement",
+      "kind": "movement",
+      "name": "American Progressive Movement",
+      "parent_scope_id": "us",
+      "aliases": [
+        "Progressive Era movement",
+        "American Progressivism",
+        "Progressive movement in the United States"
+      ]
+    },
+    {
+      "id": "us_civil_rights_movement",
+      "kind": "movement",
+      "name": "American Civil Rights Movement",
+      "parent_scope_id": "us",
+      "aliases": [
+        "Civil Rights Movement",
+        "U.S. civil rights movement"
+      ]
+    },
+    {
+      "id": "us_new_right",
+      "kind": "movement",
+      "name": "American New Right",
+      "parent_scope_id": "us",
+      "aliases": [
+        "New Right",
+        "U.S. New Right"
+      ]
+    },
+    {
+      "id": "us_populist_party",
+      "kind": "party",
+      "name": "People's Party of the United States",
+      "parent_scope_id": "us",
+      "aliases": [
+        "Populist Party",
+        "People's Party USA"
+      ]
+    },
+    {
+      "id": "us_radical_republicans",
+      "kind": "faction",
+      "name": "Radical Republicans",
+      "parent_scope_id": "us_republican_party",
+      "aliases": [
+        "Radical Republican faction"
+      ]
+    },
+    {
       "id": "uk",
       "kind": "polity",
       "name": "United Kingdom",
@@ -72,6 +1475,82 @@
         "British Empire"
       ],
       "notes": "England-as-UK is contested pre-1707; acceptable at spike scale."
+    },
+    {
+      "id": "uk_conservative_party",
+      "kind": "party",
+      "name": "Conservative Party of the United Kingdom",
+      "parent_scope_id": "uk",
+      "aliases": [
+        "British Conservative Party",
+        "Conservative Party UK",
+        "Tories"
+      ]
+    },
+    {
+      "id": "uk_labour_party",
+      "kind": "party",
+      "name": "Labour Party of the United Kingdom",
+      "parent_scope_id": "uk",
+      "aliases": [
+        "Labour Party",
+        "British Labour Party",
+        "Labour Party UK",
+        "UK Labour"
+      ]
+    },
+    {
+      "id": "uk_liberal_party",
+      "kind": "party",
+      "name": "Liberal Party of the United Kingdom",
+      "parent_scope_id": "uk",
+      "aliases": [
+        "Liberal Party",
+        "British Liberal Party",
+        "Liberal Party UK"
+      ]
+    },
+    {
+      "id": "uk_whig_party",
+      "kind": "party",
+      "name": "British Whig Party",
+      "parent_scope_id": "uk",
+      "aliases": [
+        "Whig Party",
+        "Whig party",
+        "Whigs"
+      ]
+    },
+    {
+      "id": "uk_liberal_democrats",
+      "kind": "party",
+      "name": "Liberal Democrats",
+      "parent_scope_id": "uk",
+      "aliases": [
+        "UK Liberal Democrats",
+        "Lib Dems",
+        "SDP-Liberal Alliance"
+      ]
+    },
+    {
+      "id": "scottish_national_party",
+      "kind": "party",
+      "name": "Scottish National Party",
+      "parent_scope_id": "uk",
+      "aliases": [
+        "SNP",
+        "Scottish Nationalists"
+      ]
+    },
+    {
+      "id": "uk_independence_party",
+      "kind": "party",
+      "name": "UK Independence Party",
+      "parent_scope_id": "uk",
+      "aliases": [
+        "UKIP",
+        "United Kingdom Independence Party"
+      ]
     },
     {
       "id": "france",
@@ -94,12 +1573,284 @@
         "German Empire",
         "Wilhelmine Germany",
         "Weimar Germany",
+        "Weimar Republic",
         "Nazi Germany",
         "Third Reich",
         "West Germany",
+        "Federal Republic of Germany",
+        "Unified Germany",
+        "German Democratic Republic",
+        "GDR",
         "Prussia"
       ],
       "notes": "Prussia-as-Germany is contested pre-1871; registry treats German polity continuity as one scope (Sec 9 hypothesis)."
+    },
+    {
+      "id": "german_nazi_party",
+      "kind": "party",
+      "name": "Nazi Party",
+      "parent_scope_id": "germany",
+      "aliases": [
+        "NSDAP",
+        "National Socialist German Workers' Party",
+        "National Socialist Party"
+      ]
+    },
+    {
+      "id": "german_social_democratic_party",
+      "kind": "party",
+      "name": "Social Democratic Party of Germany",
+      "parent_scope_id": "germany",
+      "aliases": [
+        "SPD",
+        "German Social Democrats"
+      ]
+    },
+    {
+      "id": "german_cdu_csu",
+      "kind": "party",
+      "name": "CDU-CSU",
+      "parent_scope_id": "germany",
+      "aliases": [
+        "CDU/CSU",
+        "Christian Democratic Union and Christian Social Union",
+        "German Christian Democrats"
+      ]
+    },
+    {
+      "id": "german_green_party",
+      "kind": "party",
+      "name": "German Green Party",
+      "parent_scope_id": "germany",
+      "aliases": [
+        "The Greens Germany",
+        "Alliance 90/The Greens",
+        "Bundnis 90/Die Grunen"
+      ]
+    },
+    {
+      "id": "central_eastern_europe",
+      "kind": "region",
+      "name": "Central and Eastern Europe",
+      "parent_scope_id": "western",
+      "aliases": [
+        "Central Europe",
+        "East-Central Europe",
+        "Central Eastern Europe"
+      ],
+      "notes": "A geographic visualization parent, not a claim that the region has one homogeneous civilization."
+    },
+    {
+      "id": "balkans",
+      "kind": "region",
+      "name": "Balkans",
+      "parent_scope_id": "central_eastern_europe",
+      "aliases": [
+        "Balkan Peninsula",
+        "Balkan states",
+        "Southeastern Europe"
+      ]
+    },
+    {
+      "id": "balkan_league",
+      "kind": "organization",
+      "name": "Balkan League",
+      "parent_scope_id": "balkans",
+      "aliases": [
+        "League of Balkan States"
+      ]
+    },
+    {
+      "id": "bulgaria",
+      "kind": "polity",
+      "name": "Bulgaria",
+      "parent_scope_id": "balkans",
+      "aliases": [
+        "Bulgarian Empire",
+        "First Bulgarian Empire",
+        "Kingdom of Bulgaria",
+        "Bulgarian state"
+      ]
+    },
+    {
+      "id": "serbia",
+      "kind": "polity",
+      "name": "Serbia",
+      "parent_scope_id": "balkans",
+      "aliases": [
+        "Servia",
+        "Serbian Empire",
+        "Kingdom of Serbia",
+        "Raska"
+      ]
+    },
+    {
+      "id": "serbs",
+      "kind": "group",
+      "name": "Serbs",
+      "parent_scope_id": "serbia",
+      "aliases": [
+        "Serbian people"
+      ]
+    },
+    {
+      "id": "obrenovic_dynasty",
+      "kind": "group",
+      "name": "Obrenović Dynasty",
+      "parent_scope_id": "serbia",
+      "aliases": [
+        "Obrenović dynasty",
+        "Obrenovic dynasty",
+        "House of Obrenović"
+      ]
+    },
+    {
+      "id": "romania",
+      "kind": "polity",
+      "name": "Romania",
+      "parent_scope_id": "balkans",
+      "aliases": [
+        "Rumania",
+        "Roumania",
+        "Romanian principalities",
+        "Rumanian Principalities"
+      ]
+    },
+    {
+      "id": "montenegro",
+      "kind": "polity",
+      "name": "Montenegro",
+      "parent_scope_id": "balkans",
+      "aliases": [
+        "Kingdom of Montenegro"
+      ]
+    },
+    {
+      "id": "albania",
+      "kind": "polity",
+      "name": "Albania",
+      "parent_scope_id": "balkans",
+      "aliases": [
+        "Albanian state"
+      ]
+    },
+    {
+      "id": "bohemia",
+      "kind": "polity",
+      "name": "Bohemia",
+      "parent_scope_id": "central_eastern_europe",
+      "aliases": [
+        "Czech lands",
+        "Kingdom of Bohemia",
+        "Bohemian kingdom",
+        "Bohemian state"
+      ]
+    },
+    {
+      "id": "hussite_movement",
+      "kind": "movement",
+      "name": "Hussite Movement",
+      "parent_scope_id": "bohemia",
+      "aliases": [
+        "Hussites",
+        "Hussite movement",
+        "Hussite revolution"
+      ]
+    },
+    {
+      "id": "jan_hus",
+      "kind": "person",
+      "name": "Jan Hus",
+      "parent_scope_id": "hussite_movement",
+      "aliases": [
+        "John Hus",
+        "John Huss"
+      ]
+    },
+    {
+      "id": "utraquists",
+      "kind": "faction",
+      "name": "Utraquists",
+      "parent_scope_id": "hussite_movement",
+      "aliases": [
+        "Utraquist movement",
+        "Utraquist party",
+        "Utraquist Party",
+        "Bohemian Utraquists"
+      ]
+    },
+    {
+      "id": "taborites",
+      "kind": "faction",
+      "name": "Taborites",
+      "parent_scope_id": "hussite_movement",
+      "aliases": [
+        "Taborite movement"
+      ]
+    },
+    {
+      "id": "unity_of_brethren",
+      "kind": "movement",
+      "name": "Unity of the Brethren",
+      "parent_scope_id": "bohemia",
+      "aliases": [
+        "Bohemian Brotherhood",
+        "Bohemian Brethren",
+        "Unity of Brethren"
+      ]
+    },
+    {
+      "id": "hungary",
+      "kind": "polity",
+      "name": "Hungary",
+      "parent_scope_id": "central_eastern_europe",
+      "aliases": [
+        "Kingdom of Hungary",
+        "Hungarian kingdom",
+        "Hungarian state"
+      ]
+    },
+    {
+      "id": "magyars",
+      "kind": "group",
+      "name": "Magyars",
+      "parent_scope_id": "hungary",
+      "aliases": [
+        "Hungarians",
+        "Magyar people",
+        "Hungarian people",
+        "Hungarian nation"
+      ]
+    },
+    {
+      "id": "arpad_dynasty",
+      "kind": "group",
+      "name": "Árpád Dynasty",
+      "parent_scope_id": "hungary",
+      "aliases": [
+        "House of Árpád",
+        "Arpad dynasty",
+        "House of Arpad"
+      ]
+    },
+    {
+      "id": "hungarian_gentry",
+      "kind": "faction",
+      "name": "Hungarian Gentry",
+      "parent_scope_id": "hungary",
+      "aliases": [
+        "Hungarian gentry",
+        "Hungarian nobility"
+      ]
+    },
+    {
+      "id": "hungarian_reform_movement",
+      "kind": "movement",
+      "name": "Hungarian Reform Movement",
+      "parent_scope_id": "hungary",
+      "aliases": [
+        "Hungarian national reform movement"
+      ]
     },
     {
       "id": "austria_hungary",
@@ -127,6 +1878,37 @@
       "notes": "Deliberately no civilization parent: Russia-as-Western is contested."
     },
     {
+      "id": "united_russia",
+      "kind": "party",
+      "name": "United Russia",
+      "parent_scope_id": "russia",
+      "aliases": [
+        "United Russia Party"
+      ]
+    },
+    {
+      "id": "siloviki",
+      "kind": "faction",
+      "name": "Siloviki",
+      "parent_scope_id": "russia",
+      "aliases": [
+        "Russian security faction",
+        "security-service veterans"
+      ]
+    },
+    {
+      "id": "romanov_dynasty",
+      "kind": "group",
+      "name": "Romanov Dynasty",
+      "parent_scope_id": "russia",
+      "aliases": [
+        "Romanoff dynasty",
+        "Romanov dynasty",
+        "House of Romanov",
+        "House of Romanoff"
+      ]
+    },
+    {
       "id": "china",
       "kind": "polity",
       "name": "China",
@@ -139,9 +1921,37 @@
         "PRC",
         "People's Republic of China",
         "Middle Kingdom",
-        "Imperial China"
+        "Imperial China",
+        "Chinese Empire",
+        "The Chinese Empire",
+        "Han Dynasty",
+        "Tang Dynasty",
+        "T'ang Dynasty",
+        "Ming Dynasty",
+        "Qing Dynasty",
+        "Manchu Dynasty"
       ],
       "notes": "Spans dynastic breaks per the design doc's default hypothesis (Sec 9)."
+    },
+    {
+      "id": "song_dynasty",
+      "kind": "polity",
+      "name": "Song Dynasty",
+      "parent_scope_id": "china",
+      "aliases": [
+        "Sung dynasty",
+        "Sung Dynasty"
+      ]
+    },
+    {
+      "id": "yuan_dynasty",
+      "kind": "polity",
+      "name": "Yuan Dynasty",
+      "parent_scope_id": "china",
+      "aliases": [
+        "Yuan dynasty",
+        "Mongol dynasty of China"
+      ]
     },
     {
       "id": "chinese_communist_party",
@@ -169,6 +1979,393 @@
       ]
     },
     {
+      "id": "liberal_democratic_party_japan",
+      "kind": "party",
+      "name": "Liberal Democratic Party of Japan",
+      "parent_scope_id": "japan",
+      "aliases": [
+        "Liberal Democratic Party",
+        "Japanese Liberal Democratic Party",
+        "LDP"
+      ]
+    },
+    {
+      "id": "democratic_party_japan",
+      "kind": "party",
+      "name": "Democratic Party of Japan",
+      "parent_scope_id": "japan",
+      "aliases": [
+        "DPJ"
+      ]
+    },
+    {
+      "id": "ainu",
+      "kind": "group",
+      "name": "Ainu",
+      "parent_scope_id": "japan",
+      "aliases": [
+        "Ainos",
+        "Ainu people"
+      ]
+    },
+    {
+      "id": "tokugawa_shogunate",
+      "kind": "polity",
+      "name": "Tokugawa Shogunate",
+      "parent_scope_id": "japan",
+      "aliases": [
+        "Tokugawa shōgunate",
+        "Edo Shogunate",
+        "Edo period government"
+      ]
+    },
+    {
+      "id": "tokugawa_clan",
+      "kind": "group",
+      "name": "Tokugawa Clan",
+      "parent_scope_id": "tokugawa_shogunate",
+      "aliases": [
+        "Tokugawa family"
+      ]
+    },
+    {
+      "id": "new_zealand",
+      "kind": "polity",
+      "name": "New Zealand",
+      "parent_scope_id": "oceania",
+      "aliases": [
+        "Aotearoa",
+        "Ao Tea Roa"
+      ]
+    },
+    {
+      "id": "maori",
+      "kind": "group",
+      "name": "Māori",
+      "parent_scope_id": "new_zealand",
+      "aliases": [
+        "Maori",
+        "Māori people",
+        "Maori people",
+        "Māori tribes of the North Island"
+      ],
+      "notes": "A broad corpus-navigation scope; iwi and hapū remain valid and distinct focal groups."
+    },
+    {
+      "id": "maori_king_movement",
+      "kind": "movement",
+      "name": "Māori King Movement",
+      "parent_scope_id": "maori",
+      "aliases": [
+        "Maori King Movement",
+        "King Movement",
+        "Kīngitanga",
+        "Kingitanga"
+      ]
+    },
+    {
+      "id": "pai_marire",
+      "kind": "movement",
+      "name": "Pai Mārire",
+      "parent_scope_id": "maori",
+      "aliases": [
+        "Pai Marire",
+        "Hau-Hau movement",
+        "Hauhau movement"
+      ]
+    },
+    {
+      "id": "new_zealand_parliament",
+      "kind": "institution",
+      "name": "New Zealand Parliament",
+      "parent_scope_id": "new_zealand",
+      "aliases": [
+        "General Assembly of New Zealand",
+        "New Zealand General Assembly"
+      ]
+    },
+    {
+      "id": "colony_of_new_zealand",
+      "kind": "polity",
+      "name": "Colony of New Zealand",
+      "parent_scope_id": "new_zealand",
+      "aliases": [
+        "New Zealand Colony",
+        "colonial New Zealand",
+        "New Zealand colonial government"
+      ]
+    },
+    {
+      "id": "sioux",
+      "kind": "group",
+      "name": "Sioux Nation",
+      "parent_scope_id": "indigenous_north_america",
+      "aliases": [
+        "Sioux",
+        "Sioux nation"
+      ],
+      "notes": "A broad source-aligned scope; Dakota, Lakota, and Nakota identities are not treated as interchangeable aliases."
+    },
+    {
+      "id": "lakota",
+      "kind": "group",
+      "name": "Lakota",
+      "parent_scope_id": "sioux",
+      "aliases": [
+        "Teton Sioux"
+      ]
+    },
+    {
+      "id": "oglala",
+      "kind": "group",
+      "name": "Oglala Lakota",
+      "parent_scope_id": "lakota",
+      "aliases": [
+        "Oglala Sioux",
+        "Oglala"
+      ]
+    },
+    {
+      "id": "hunkpapa",
+      "kind": "group",
+      "name": "Hunkpapa Lakota",
+      "parent_scope_id": "lakota",
+      "aliases": [
+        "Hunkpapa band",
+        "Hunkpapa"
+      ]
+    },
+    {
+      "id": "dakota",
+      "kind": "group",
+      "name": "Dakota",
+      "parent_scope_id": "sioux",
+      "aliases": [
+        "Dakota people"
+      ]
+    },
+    {
+      "id": "mdewakanton",
+      "kind": "group",
+      "name": "Mdewakanton Dakota",
+      "parent_scope_id": "dakota",
+      "aliases": [
+        "Mdewakanton"
+      ]
+    },
+    {
+      "id": "cheyenne",
+      "kind": "group",
+      "name": "Cheyenne",
+      "parent_scope_id": "indigenous_north_america",
+      "aliases": [
+        "Cheyenne people"
+      ]
+    },
+    {
+      "id": "northern_cheyenne",
+      "kind": "group",
+      "name": "Northern Cheyenne",
+      "parent_scope_id": "cheyenne",
+      "aliases": []
+    },
+    {
+      "id": "mughal",
+      "kind": "polity",
+      "name": "Mughal Empire",
+      "parent_scope_id": "south_asia",
+      "aliases": [
+        "Mogul Empire",
+        "Mughals"
+      ]
+    },
+    {
+      "id": "ghana_empire",
+      "kind": "polity",
+      "name": "Ghana Empire",
+      "parent_scope_id": "west_africa",
+      "aliases": [
+        "Ancient Ghana",
+        "Wagadou"
+      ]
+    },
+    {
+      "id": "mali_empire",
+      "kind": "polity",
+      "name": "Mali Empire",
+      "parent_scope_id": "west_africa",
+      "aliases": [
+        "Manden Kurufaba",
+        "Mali"
+      ]
+    },
+    {
+      "id": "songhai",
+      "kind": "polity",
+      "name": "Songhai Empire",
+      "parent_scope_id": "west_africa",
+      "aliases": [
+        "Songhay",
+        "Songhay Empire",
+        "Songhai"
+      ]
+    },
+    {
+      "id": "kongo",
+      "kind": "polity",
+      "name": "Kingdom of Kongo",
+      "parent_scope_id": "africa",
+      "aliases": [
+        "Kongo Kingdom",
+        "Congo Kingdom"
+      ]
+    },
+    {
+      "id": "mutapa",
+      "kind": "polity",
+      "name": "Kingdom of Mutapa",
+      "parent_scope_id": "africa",
+      "aliases": [
+        "Monomotapa",
+        "Mwene Mutapa",
+        "Mutapa Empire"
+      ]
+    },
+    {
+      "id": "aztec",
+      "kind": "polity",
+      "name": "Aztec Empire",
+      "parent_scope_id": "mesoamerica",
+      "aliases": [
+        "Aztec",
+        "Aztecs",
+        "Mexica",
+        "Triple Alliance",
+        "Tenochtitlan"
+      ]
+    },
+    {
+      "id": "maya",
+      "kind": "civilization",
+      "name": "Maya Civilization",
+      "parent_scope_id": "mesoamerica",
+      "aliases": [
+        "Maya",
+        "Mayas",
+        "Mayan civilization",
+        "Maya world"
+      ]
+    },
+    {
+      "id": "nahua_religion",
+      "kind": "discourse",
+      "name": "Nahua Religious System",
+      "parent_scope_id": "mesoamerica",
+      "aliases": [
+        "Mexican pantheon",
+        "Mexican religion",
+        "Nahua religion"
+      ]
+    },
+    {
+      "id": "inca",
+      "kind": "polity",
+      "name": "Inca Empire",
+      "parent_scope_id": "andean",
+      "aliases": [
+        "Inca",
+        "Incas",
+        "Inca civilization",
+        "Tawantinsuyu",
+        "Empire of the Incas"
+      ]
+    },
+    {
+      "id": "inca_dynasty",
+      "kind": "group",
+      "name": "Inca Dynasty",
+      "parent_scope_id": "inca",
+      "aliases": [
+        "Inca dynasty",
+        "Inca royal dynasty",
+        "House of the Incas"
+      ]
+    },
+    {
+      "id": "cuzco",
+      "kind": "polity",
+      "name": "Cuzco",
+      "parent_scope_id": "andean",
+      "aliases": [
+        "Cusco",
+        "Kingdom of Cuzco"
+      ]
+    },
+    {
+      "id": "al_andalus",
+      "kind": "polity",
+      "name": "Al-Andalus",
+      "parent_scope_id": "islamicate",
+      "aliases": [
+        "Moorish Spain",
+        "Muslim Spain",
+        "Spanish Moors",
+        "Moors in Spain"
+      ]
+    },
+    {
+      "id": "philippines",
+      "kind": "polity",
+      "name": "Philippines",
+      "parent_scope_id": "southeast_asia",
+      "aliases": [
+        "Philippine Islands",
+        "The Philippines"
+      ]
+    },
+    {
+      "id": "spanish_philippines",
+      "kind": "polity",
+      "name": "Spanish Philippines",
+      "parent_scope_id": "philippines",
+      "aliases": [
+        "Spanish colonial government in the Philippines",
+        "Spanish Empire in the Philippines",
+        "Spanish colonial Philippines"
+      ]
+    },
+    {
+      "id": "philippine_revolutionary_government",
+      "kind": "organization",
+      "name": "Philippine Revolutionary Government",
+      "parent_scope_id": "philippines",
+      "aliases": [
+        "Revolutionary Government of the Philippines",
+        "First Philippine Republic"
+      ]
+    },
+    {
+      "id": "filipino_reform_movement",
+      "kind": "movement",
+      "name": "Filipino Reform Movement",
+      "parent_scope_id": "philippines",
+      "aliases": [
+        "Philippine reform movement",
+        "Propaganda Movement"
+      ]
+    },
+    {
+      "id": "manila_chinese_community",
+      "kind": "group",
+      "name": "Chinese Community of Manila",
+      "parent_scope_id": "philippines",
+      "aliases": [
+        "Chinese community of Manila",
+        "Manila Chinese community",
+        "Chinese residents of Manila"
+      ]
+    },
+    {
       "id": "netherlands",
       "kind": "polity",
       "name": "Netherlands",
@@ -191,6 +2388,17 @@
       ]
     },
     {
+      "id": "portugal",
+      "kind": "polity",
+      "name": "Portugal",
+      "parent_scope_id": "western",
+      "aliases": [
+        "Kingdom of Portugal",
+        "Portuguese Empire",
+        "Portuguese"
+      ]
+    },
+    {
       "id": "italy",
       "kind": "polity",
       "name": "Italy",
@@ -204,12 +2412,100 @@
       "id": "ottoman",
       "kind": "polity",
       "name": "Ottoman Empire",
+      "parent_scope_id": "islamicate",
       "aliases": [
         "Ottomans",
+        "Osmanli",
+        "Osmanli state",
         "Sublime Porte",
-        "Turkey"
+        "Ottoman Porte",
+        "Ottoman State",
+        "Turkish Empire"
       ],
-      "notes": "Turkey alias is contested post-1923."
+      "notes": "The imperial polity through 1922; the successor Republic of Turkey has a separate scope."
+    },
+    {
+      "id": "osman_i",
+      "kind": "person",
+      "name": "Osman I",
+      "parent_scope_id": "ottoman",
+      "aliases": [
+        "Othman",
+        "Othmân",
+        "Othman I",
+        "Osman Ghazi"
+      ]
+    },
+    {
+      "id": "mehmed_ii",
+      "kind": "person",
+      "name": "Mehmed II",
+      "parent_scope_id": "ottoman",
+      "aliases": [
+        "Mahomet II",
+        "Sultan Mahomet (Mehmet II)",
+        "Mehmed the Conqueror"
+      ]
+    },
+    {
+      "id": "suleiman_i",
+      "kind": "person",
+      "name": "Suleiman I",
+      "parent_scope_id": "ottoman",
+      "aliases": [
+        "Suleiman",
+        "Solyman",
+        "Suleiman the Magnificent"
+      ]
+    },
+    {
+      "id": "janissaries",
+      "kind": "group",
+      "name": "Janissaries",
+      "parent_scope_id": "ottoman",
+      "aliases": [
+        "Janissary corps",
+        "Ottoman Janissaries"
+      ]
+    },
+    {
+      "id": "young_turks",
+      "kind": "movement",
+      "name": "Young Turks",
+      "parent_scope_id": "ottoman",
+      "aliases": [
+        "The Young Turks",
+        "Young Turk movement"
+      ]
+    },
+    {
+      "id": "committee_union_progress",
+      "kind": "party",
+      "name": "Committee of Union and Progress",
+      "parent_scope_id": "young_turks",
+      "aliases": [
+        "CUP",
+        "Union and Progress"
+      ]
+    },
+    {
+      "id": "ottoman_reform_movement",
+      "kind": "movement",
+      "name": "Ottoman Reform Movement",
+      "parent_scope_id": "ottoman",
+      "aliases": [
+        "Ottoman reform movement"
+      ]
+    },
+    {
+      "id": "koprulu_family",
+      "kind": "faction",
+      "name": "Köprülü Family",
+      "parent_scope_id": "ottoman",
+      "aliases": [
+        "Kiuprili family",
+        "Koprulu family"
+      ]
     },
     {
       "id": "rome",
@@ -218,16 +2514,47 @@
       "aliases": [
         "Roman Republic",
         "Roman Empire",
-        "Ancient Rome"
+        "Ancient Rome",
+        "Roman state"
       ]
     },
     {
       "id": "byzantium",
       "kind": "polity",
       "name": "Byzantium",
+      "parent_scope_id": "hellenic",
       "aliases": [
         "Byzantine Empire",
-        "Eastern Roman Empire"
+        "Eastern Roman Empire",
+        "Romaic Empire"
+      ]
+    },
+    {
+      "id": "justinian_i",
+      "kind": "person",
+      "name": "Justinian I",
+      "parent_scope_id": "byzantium",
+      "aliases": [
+        "Justinian",
+        "Emperor Justinian"
+      ]
+    },
+    {
+      "id": "macedonian_dynasty_byzantine",
+      "kind": "group",
+      "name": "Byzantine Macedonian Dynasty",
+      "parent_scope_id": "byzantium",
+      "aliases": [
+        "Macedonian Dynasty"
+      ]
+    },
+    {
+      "id": "empire_of_nicaea",
+      "kind": "polity",
+      "name": "Empire of Nicaea",
+      "parent_scope_id": "byzantium",
+      "aliases": [
+        "Nicene Empire"
       ]
     },
     {
@@ -255,10 +2582,1360 @@
       "kind": "polity",
       "name": "Persia",
       "aliases": [
-        "Iran",
         "Achaemenid Empire",
         "Safavid Persia",
         "Persian Empire"
+      ]
+    },
+    {
+      "id": "iran",
+      "kind": "polity",
+      "name": "Iran",
+      "parent_scope_id": "islamicate",
+      "aliases": [
+        "Modern Iran",
+        "Islamic Republic of Iran",
+        "Pahlavi Iran",
+        "Iranian state"
+      ]
+    },
+    {
+      "id": "pahlavi_dynasty",
+      "kind": "group",
+      "name": "Pahlavi Dynasty",
+      "parent_scope_id": "iran",
+      "aliases": [
+        "Pahlavis",
+        "House of Pahlavi",
+        "Pahlavi state"
+      ]
+    },
+    {
+      "id": "iranian_revolution",
+      "kind": "movement",
+      "name": "Iranian Revolution",
+      "parent_scope_id": "iran",
+      "aliases": [
+        "Islamic Revolution of Iran",
+        "Khomeini movement"
+      ]
+    },
+    {
+      "id": "iranian_national_front",
+      "kind": "movement",
+      "name": "National Front of Iran",
+      "parent_scope_id": "iran",
+      "aliases": [
+        "Iranian National Front",
+        "Jebhe Melli"
+      ]
+    },
+    {
+      "id": "iranian_islamic_republican_party",
+      "kind": "party",
+      "name": "Islamic Republican Party",
+      "parent_scope_id": "iran",
+      "aliases": [
+        "IRP Iran",
+        "Iranian Islamic Republican Party"
+      ]
+    },
+    {
+      "id": "iranian_reform_movement",
+      "kind": "movement",
+      "name": "Iranian Reform Movement",
+      "parent_scope_id": "iran",
+      "aliases": [
+        "Iranian reformists",
+        "Reformists of Iran",
+        "Reformist faction",
+        "Reformist movement",
+        "Second of Khordad coalition"
+      ]
+    },
+    {
+      "id": "sassanid_empire",
+      "kind": "polity",
+      "name": "Sassanid Empire",
+      "parent_scope_id": "persia",
+      "aliases": [
+        "Sasanian Empire",
+        "Sāsānides",
+        "Sassanid Persia"
+      ]
+    },
+    {
+      "id": "arsacid_dynasty",
+      "kind": "group",
+      "name": "Arsacid Dynasty",
+      "parent_scope_id": "persia",
+      "aliases": [
+        "Arsacid dynasty",
+        "Parthian dynasty"
+      ]
+    },
+    {
+      "id": "french_revolution",
+      "kind": "movement",
+      "name": "French Revolution",
+      "parent_scope_id": "france",
+      "aliases": [
+        "French revolutionary movement",
+        "Revolution of 1789"
+      ]
+    },
+    {
+      "id": "jacobins",
+      "kind": "faction",
+      "name": "Jacobins",
+      "parent_scope_id": "french_revolution",
+      "aliases": [
+        "Jacobin Club",
+        "French Jacobins"
+      ]
+    },
+    {
+      "id": "french_bourbons",
+      "kind": "group",
+      "name": "French House of Bourbon",
+      "parent_scope_id": "france",
+      "aliases": [
+        "Bourbon Dynasty",
+        "Bourbon monarchy"
+      ]
+    },
+    {
+      "id": "french_third_republic",
+      "kind": "polity",
+      "name": "French Third Republic",
+      "parent_scope_id": "france",
+      "aliases": [
+        "Third Republic of France",
+        "Third French Republic",
+        "Third Republic"
+      ]
+    },
+    {
+      "id": "french_socialist_party",
+      "kind": "party",
+      "name": "French Socialist Party",
+      "parent_scope_id": "france",
+      "aliases": [
+        "Socialist Party (France)",
+        "Parti Socialiste"
+      ]
+    },
+    {
+      "id": "french_republicans",
+      "kind": "party",
+      "name": "The Republicans of France",
+      "parent_scope_id": "france",
+      "aliases": [
+        "French Republicans",
+        "Les Republicains"
+      ]
+    },
+    {
+      "id": "french_national_rally",
+      "kind": "party",
+      "name": "National Rally",
+      "parent_scope_id": "france",
+      "aliases": [
+        "National Front",
+        "Front National",
+        "National Front of France",
+        "French National Front",
+        "Rassemblement National"
+      ]
+    },
+    {
+      "id": "french_en_marche",
+      "kind": "party",
+      "name": "Renaissance Party of France",
+      "parent_scope_id": "france",
+      "aliases": [
+        "La Republique En Marche",
+        "La Republique En Marche!",
+        "La République En Marche!",
+        "En Marche",
+        "LREM",
+        "Renaissance (France)"
+      ]
+    },
+    {
+      "id": "turkey",
+      "kind": "polity",
+      "name": "Turkey",
+      "parent_scope_id": "islamicate",
+      "aliases": [
+        "Republic of Turkey",
+        "Turkish Republic",
+        "Modern Turkey",
+        "Turkish state",
+        "Turkish Government",
+        "Turkish political system"
+      ]
+    },
+    {
+      "id": "turkish_republican_peoples_party",
+      "kind": "party",
+      "name": "Republican People's Party",
+      "parent_scope_id": "turkey",
+      "aliases": [
+        "CHP",
+        "Republican Peoples Party of Turkey"
+      ]
+    },
+    {
+      "id": "turkish_democrat_party",
+      "kind": "party",
+      "name": "Democrat Party of Turkey",
+      "parent_scope_id": "turkey",
+      "aliases": [
+        "Turkish Democrat Party",
+        "DP Turkey"
+      ]
+    },
+    {
+      "id": "turkish_justice_party",
+      "kind": "party",
+      "name": "Justice Party of Turkey",
+      "parent_scope_id": "turkey",
+      "aliases": [
+        "Turkish Justice Party",
+        "Justice Party",
+        "AP Turkey"
+      ]
+    },
+    {
+      "id": "turkish_motherland_party",
+      "kind": "party",
+      "name": "Motherland Party",
+      "parent_scope_id": "turkey",
+      "aliases": [
+        "ANAP",
+        "Motherland Party of Turkey"
+      ]
+    },
+    {
+      "id": "turkish_welfare_party",
+      "kind": "party",
+      "name": "Welfare Party of Turkey",
+      "parent_scope_id": "turkey",
+      "aliases": [
+        "Refah Party",
+        "Welfare Party",
+        "RP Turkey"
+      ]
+    },
+    {
+      "id": "turkish_armed_forces",
+      "kind": "institution",
+      "name": "Turkish Armed Forces",
+      "parent_scope_id": "turkey",
+      "aliases": [
+        "Turkish military",
+        "Turkey's armed forces"
+      ]
+    },
+    {
+      "id": "kurdish_movement_turkey",
+      "kind": "movement",
+      "name": "Kurdish Movement in Turkey",
+      "parent_scope_id": "turkey",
+      "aliases": [
+        "Kurdish nationalist movement in Turkey",
+        "Kurdish insurgency in Turkey"
+      ]
+    },
+    {
+      "id": "kurdistan_workers_party",
+      "kind": "organization",
+      "name": "Kurdistan Workers' Party",
+      "parent_scope_id": "kurdish_movement_turkey",
+      "aliases": [
+        "PKK",
+        "Kurdistan Workers' Party (PKK)"
+      ]
+    },
+    {
+      "id": "ethiopia",
+      "kind": "polity",
+      "name": "Ethiopia",
+      "parent_scope_id": "east_africa",
+      "aliases": [
+        "Federal Democratic Republic of Ethiopia",
+        "Ethiopian state",
+        "Abyssinia"
+      ]
+    },
+    {
+      "id": "ethiopian_empire",
+      "kind": "polity",
+      "name": "Ethiopian Empire",
+      "parent_scope_id": "ethiopia",
+      "aliases": [
+        "Imperial Ethiopia",
+        "Abyssinian Empire"
+      ]
+    },
+    {
+      "id": "ethiopian_derg",
+      "kind": "faction",
+      "name": "Derg",
+      "parent_scope_id": "ethiopia",
+      "aliases": [
+        "Ethiopian Derg",
+        "Provisional Military Administrative Council"
+      ]
+    },
+    {
+      "id": "ethiopian_eprdf",
+      "kind": "party",
+      "name": "Ethiopian People's Revolutionary Democratic Front",
+      "parent_scope_id": "ethiopia",
+      "aliases": [
+        "EPRDF",
+        "Ethiopian Peoples Revolutionary Democratic Front"
+      ]
+    },
+    {
+      "id": "tigray_peoples_liberation_front",
+      "kind": "organization",
+      "name": "Tigray People's Liberation Front",
+      "parent_scope_id": "ethiopian_eprdf",
+      "aliases": [
+        "TPLF",
+        "Tigrayan People's Liberation Front"
+      ]
+    },
+    {
+      "id": "oromo_liberation_front",
+      "kind": "organization",
+      "name": "Oromo Liberation Front",
+      "parent_scope_id": "ethiopia",
+      "aliases": [
+        "OLF"
+      ]
+    },
+    {
+      "id": "eritrea",
+      "kind": "polity",
+      "name": "Eritrea",
+      "parent_scope_id": "east_africa",
+      "aliases": [
+        "State of Eritrea"
+      ]
+    },
+    {
+      "id": "eritrean_peoples_liberation_front",
+      "kind": "organization",
+      "name": "Eritrean People's Liberation Front",
+      "parent_scope_id": "eritrea",
+      "aliases": [
+        "EPLF",
+        "Eritrean Peoples Liberation Front"
+      ]
+    },
+    {
+      "id": "argentina",
+      "kind": "polity",
+      "name": "Argentina",
+      "parent_scope_id": "latin_america",
+      "aliases": [
+        "Argentine Republic",
+        "Argentine state",
+        "Argentine Government"
+      ]
+    },
+    {
+      "id": "argentine_justicialist_party",
+      "kind": "party",
+      "name": "Justicialist Party",
+      "parent_scope_id": "argentina",
+      "aliases": [
+        "Peronist Party",
+        "Argentine Peronists",
+        "Peronist Movement"
+      ]
+    },
+    {
+      "id": "argentine_radical_civic_union",
+      "kind": "party",
+      "name": "Radical Civic Union",
+      "parent_scope_id": "argentina",
+      "aliases": [
+        "UCR Argentina",
+        "Union Civica Radical"
+      ]
+    },
+    {
+      "id": "argentine_military_regimes",
+      "kind": "faction",
+      "name": "Argentine Military Regimes",
+      "parent_scope_id": "argentina",
+      "aliases": [
+        "Argentine military government",
+        "Argentine military junta"
+      ]
+    },
+    {
+      "id": "colombia",
+      "kind": "polity",
+      "name": "Colombia",
+      "parent_scope_id": "latin_america",
+      "aliases": [
+        "Republic of Colombia",
+        "Colombian state"
+      ]
+    },
+    {
+      "id": "colombian_liberal_party",
+      "kind": "party",
+      "name": "Colombian Liberal Party",
+      "parent_scope_id": "colombia",
+      "aliases": [
+        "Liberal Party of Colombia",
+        "PL Colombia"
+      ]
+    },
+    {
+      "id": "colombian_conservative_party",
+      "kind": "party",
+      "name": "Colombian Conservative Party",
+      "parent_scope_id": "colombia",
+      "aliases": [
+        "Conservative Party of Colombia",
+        "PC Colombia"
+      ]
+    },
+    {
+      "id": "colombian_national_front",
+      "kind": "movement",
+      "name": "Colombian National Front",
+      "parent_scope_id": "colombia",
+      "aliases": [
+        "Frente Nacional",
+        "National Front of Colombia"
+      ]
+    },
+    {
+      "id": "farc",
+      "kind": "organization",
+      "name": "Revolutionary Armed Forces of Colombia",
+      "parent_scope_id": "colombia",
+      "aliases": [
+        "FARC",
+        "FARC-EP"
+      ]
+    },
+    {
+      "id": "colombian_eln",
+      "kind": "organization",
+      "name": "National Liberation Army of Colombia",
+      "parent_scope_id": "colombia",
+      "aliases": [
+        "ELN Colombia",
+        "Colombian ELN"
+      ]
+    },
+    {
+      "id": "colombian_m19",
+      "kind": "organization",
+      "name": "19th of April Movement",
+      "parent_scope_id": "colombia",
+      "aliases": [
+        "M-19",
+        "Nineteenth of April Movement"
+      ]
+    },
+    {
+      "id": "colombian_auc",
+      "kind": "organization",
+      "name": "United Self-Defense Forces of Colombia",
+      "parent_scope_id": "colombia",
+      "aliases": [
+        "AUC Colombia",
+        "Colombian paramilitaries"
+      ]
+    },
+    {
+      "id": "australia",
+      "kind": "polity",
+      "name": "Australia",
+      "parent_scope_id": "oceania",
+      "aliases": [
+        "Commonwealth of Australia",
+        "Australian state"
+      ]
+    },
+    {
+      "id": "australian_labor_party",
+      "kind": "party",
+      "name": "Australian Labor Party",
+      "parent_scope_id": "australia",
+      "aliases": [
+        "ALP",
+        "Labor Party of Australia"
+      ]
+    },
+    {
+      "id": "australian_liberal_party",
+      "kind": "party",
+      "name": "Liberal Party of Australia",
+      "parent_scope_id": "australia",
+      "aliases": [
+        "Australian Liberal Party"
+      ]
+    },
+    {
+      "id": "australian_indigenous_movement",
+      "kind": "movement",
+      "name": "Australian Indigenous Rights Movement",
+      "parent_scope_id": "australia",
+      "aliases": [
+        "Aboriginal rights movement",
+        "Indigenous Australian movement"
+      ]
+    },
+    {
+      "id": "european_union",
+      "kind": "institution",
+      "name": "European Union",
+      "parent_scope_id": "western",
+      "aliases": [
+        "EU",
+        "European Community",
+        "European Communities"
+      ]
+    },
+    {
+      "id": "european_integration",
+      "kind": "movement",
+      "name": "European Integration",
+      "parent_scope_id": "european_union",
+      "aliases": [
+        "European integration movement",
+        "European project"
+      ]
+    },
+    {
+      "id": "european_euroscepticism",
+      "kind": "movement",
+      "name": "European Euroscepticism",
+      "parent_scope_id": "european_union",
+      "aliases": [
+        "Euroscepticism",
+        "Euroskepticism",
+        "anti-EU movement"
+      ]
+    },
+    {
+      "id": "brexit_movement",
+      "kind": "movement",
+      "name": "Brexit Movement",
+      "parent_scope_id": "uk",
+      "aliases": [
+        "Brexit",
+        "Leave campaign",
+        "Vote Leave"
+      ]
+    },
+    {
+      "id": "brothers_of_italy",
+      "kind": "party",
+      "name": "Brothers of Italy",
+      "parent_scope_id": "italy",
+      "aliases": [
+        "Fratelli d'Italia",
+        "FdI"
+      ]
+    },
+    {
+      "id": "sweden_democrats",
+      "kind": "party",
+      "name": "Sweden Democrats",
+      "parent_scope_id": "western",
+      "aliases": [
+        "Swedish Democrats",
+        "Sverigedemokraterna",
+        "SD Sweden"
+      ]
+    },
+    {
+      "id": "melanesia",
+      "kind": "region",
+      "name": "Melanesia",
+      "parent_scope_id": "oceania",
+      "aliases": [
+        "Melanesian islands",
+        "Melanesian region"
+      ]
+    },
+    {
+      "id": "micronesia_region",
+      "kind": "region",
+      "name": "Micronesia",
+      "parent_scope_id": "oceania",
+      "aliases": [
+        "Micronesian islands",
+        "Micronesian region"
+      ]
+    },
+    {
+      "id": "polynesia",
+      "kind": "region",
+      "name": "Polynesia",
+      "parent_scope_id": "oceania",
+      "aliases": [
+        "Polynesian islands",
+        "Polynesian region"
+      ]
+    },
+    {
+      "id": "fiji",
+      "kind": "polity",
+      "name": "Fiji",
+      "parent_scope_id": "melanesia",
+      "aliases": [
+        "Republic of Fiji",
+        "Fiji Islands"
+      ]
+    },
+    {
+      "id": "papua_new_guinea",
+      "kind": "polity",
+      "name": "Papua New Guinea",
+      "parent_scope_id": "melanesia",
+      "aliases": [
+        "PNG",
+        "Papua and New Guinea"
+      ]
+    },
+    {
+      "id": "solomon_islands",
+      "kind": "polity",
+      "name": "Solomon Islands",
+      "parent_scope_id": "melanesia",
+      "aliases": [
+        "British Solomon Islands",
+        "British Solomon Islands Protectorate",
+        "Solomons"
+      ]
+    },
+    {
+      "id": "vanuatu",
+      "kind": "polity",
+      "name": "Vanuatu",
+      "parent_scope_id": "melanesia",
+      "aliases": [
+        "New Hebrides",
+        "New Hebrides Condominium",
+        "Republic of Vanuatu"
+      ]
+    },
+    {
+      "id": "tonga",
+      "kind": "polity",
+      "name": "Tonga",
+      "parent_scope_id": "polynesia",
+      "aliases": [
+        "Kingdom of Tonga",
+        "Tongan state"
+      ]
+    },
+    {
+      "id": "samoa",
+      "kind": "polity",
+      "name": "Samoa",
+      "parent_scope_id": "polynesia",
+      "aliases": [
+        "Western Samoa",
+        "Independent State of Samoa"
+      ]
+    },
+    {
+      "id": "french_polynesia",
+      "kind": "polity",
+      "name": "French Polynesia",
+      "parent_scope_id": "polynesia",
+      "aliases": [
+        "Tahiti and dependencies",
+        "French Oceania"
+      ]
+    },
+    {
+      "id": "kiribati",
+      "kind": "polity",
+      "name": "Kiribati",
+      "parent_scope_id": "micronesia_region",
+      "aliases": [
+        "Gilbert Islands",
+        "Republic of Kiribati"
+      ]
+    },
+    {
+      "id": "nauru",
+      "kind": "polity",
+      "name": "Nauru",
+      "parent_scope_id": "micronesia_region",
+      "aliases": [
+        "Republic of Nauru",
+        "Nauruan state"
+      ]
+    },
+    {
+      "id": "new_caledonia",
+      "kind": "polity",
+      "name": "New Caledonia",
+      "parent_scope_id": "melanesia",
+      "aliases": [
+        "Nouvelle-Calédonie",
+        "French New Caledonia"
+      ]
+    },
+    {
+      "id": "american_samoa",
+      "kind": "polity",
+      "name": "American Samoa",
+      "parent_scope_id": "polynesia",
+      "aliases": [
+        "Eastern Samoa",
+        "U.S. Samoa"
+      ]
+    },
+    {
+      "id": "us_tea_party",
+      "kind": "movement",
+      "name": "Tea Party Movement",
+      "parent_scope_id": "us_republican_party",
+      "aliases": [
+        "Tea Party",
+        "American Tea Party movement"
+      ]
+    },
+    {
+      "id": "us_maga_movement",
+      "kind": "movement",
+      "name": "MAGA Movement",
+      "parent_scope_id": "us_republican_party",
+      "aliases": [
+        "MAGA",
+        "Make America Great Again movement",
+        "Trump movement"
+      ]
+    },
+    {
+      "id": "donald_trump",
+      "kind": "person",
+      "name": "Donald Trump",
+      "parent_scope_id": "us_republican_party",
+      "aliases": [
+        "Donald J. Trump",
+        "President Trump"
+      ]
+    },
+    {
+      "id": "stop_the_steal",
+      "kind": "movement",
+      "name": "Stop the Steal Movement",
+      "parent_scope_id": "us_maga_movement",
+      "aliases": [
+        "Stop the Steal",
+        "election denial movement"
+      ]
+    },
+    {
+      "id": "oath_keepers",
+      "kind": "organization",
+      "name": "Oath Keepers",
+      "parent_scope_id": "us_maga_movement",
+      "aliases": [
+        "Oath Keepers militia",
+        "Oath Keepers organization"
+      ]
+    },
+    {
+      "id": "proud_boys",
+      "kind": "organization",
+      "name": "Proud Boys",
+      "parent_scope_id": "us_maga_movement",
+      "aliases": [
+        "Proud Boys organization"
+      ]
+    },
+    {
+      "id": "french_monarchy",
+      "kind": "institution",
+      "name": "French Monarchy",
+      "parent_scope_id": "france",
+      "aliases": [
+        "French monarchy",
+        "Kingdom of France",
+        "Capetian monarchy"
+      ]
+    },
+    {
+      "id": "french_second_empire",
+      "kind": "polity",
+      "name": "French Second Empire",
+      "parent_scope_id": "france",
+      "aliases": [
+        "Second French Empire"
+      ]
+    },
+    {
+      "id": "french_fifth_republic",
+      "kind": "polity",
+      "name": "French Fifth Republic",
+      "parent_scope_id": "france",
+      "aliases": [
+        "Fifth Republic",
+        "Fifth Republic of France"
+      ]
+    },
+    {
+      "id": "louis_xiv",
+      "kind": "person",
+      "name": "Louis XIV",
+      "parent_scope_id": "french_bourbons",
+      "aliases": [
+        "Louis the Great",
+        "Sun King"
+      ]
+    },
+    {
+      "id": "napoleon_bonaparte",
+      "kind": "person",
+      "name": "Napoleon Bonaparte",
+      "parent_scope_id": "france",
+      "aliases": [
+        "Napoleon I",
+        "Emperor Napoleon"
+      ]
+    },
+    {
+      "id": "european_parliament",
+      "kind": "institution",
+      "name": "European Parliament",
+      "parent_scope_id": "european_union",
+      "aliases": [
+        "EU Parliament"
+      ]
+    },
+    {
+      "id": "eu_common_security_defense_policy",
+      "kind": "institution",
+      "name": "EU Common Security and Defense Policy",
+      "parent_scope_id": "european_union",
+      "aliases": [
+        "Common Security and Defense Policy",
+        "CSDP"
+      ]
+    },
+    {
+      "id": "us_eu",
+      "kind": "dyad",
+      "name": "US-EU",
+      "aliases": [
+        "U.S.-EU Trade and Economic Relations",
+        "United States-European Union"
+      ]
+    },
+    {
+      "id": "us_house_republican_caucus",
+      "kind": "faction",
+      "name": "House Republican Caucus",
+      "parent_scope_id": "us_republican_party",
+      "aliases": [
+        "House Republicans"
+      ]
+    },
+    {
+      "id": "us_january6_committee",
+      "kind": "institution",
+      "name": "January 6th Select Committee",
+      "parent_scope_id": "us",
+      "aliases": [
+        "January 6 Committee",
+        "House January 6th Committee"
+      ]
+    },
+    {
+      "id": "us_department_of_justice",
+      "kind": "institution",
+      "name": "United States Department of Justice",
+      "parent_scope_id": "us",
+      "aliases": [
+        "U.S. Department of Justice",
+        "DOJ"
+      ]
+    },
+    {
+      "id": "trump_eastman_conspiracy",
+      "kind": "faction",
+      "name": "Trump-Eastman Conspiracy",
+      "parent_scope_id": "us_maga_movement",
+      "aliases": [
+        "Trump-Eastman plan"
+      ]
+    },
+    {
+      "id": "trump_legal_team",
+      "kind": "faction",
+      "name": "Trump Legal Team",
+      "parent_scope_id": "donald_trump",
+      "aliases": [
+        "Trump legal team",
+        "Trump campaign legal team"
+      ]
+    },
+    {
+      "id": "turkish_true_path_party",
+      "kind": "party",
+      "name": "True Path Party",
+      "parent_scope_id": "turkey",
+      "aliases": [
+        "DYP",
+        "Dogru Yol Partisi"
+      ]
+    },
+    {
+      "id": "turkish_social_democratic_populist_party",
+      "kind": "party",
+      "name": "Social Democratic Populist Party",
+      "parent_scope_id": "turkey",
+      "aliases": [
+        "SHP Turkey"
+      ]
+    },
+    {
+      "id": "turkish_political_islam",
+      "kind": "movement",
+      "name": "Political Islam in Turkey",
+      "parent_scope_id": "turkey",
+      "aliases": [
+        "Turkish political Islam",
+        "Islamist movement in Turkey"
+      ]
+    },
+    {
+      "id": "argentine_armed_forces",
+      "kind": "institution",
+      "name": "Argentine Armed Forces",
+      "parent_scope_id": "argentina",
+      "aliases": [
+        "Armed Forces of Argentina"
+      ]
+    },
+    {
+      "id": "frejuli",
+      "kind": "faction",
+      "name": "Justicialist Liberation Front",
+      "parent_scope_id": "argentine_justicialist_party",
+      "aliases": [
+        "FREJULI",
+        "Frente Justicialista de Liberacion"
+      ]
+    },
+    {
+      "id": "new_south_wales",
+      "kind": "polity",
+      "name": "New South Wales",
+      "parent_scope_id": "australia",
+      "aliases": [
+        "NSW",
+        "Convict Settlement at Sydney"
+      ]
+    },
+    {
+      "id": "south_australia",
+      "kind": "polity",
+      "name": "South Australia",
+      "parent_scope_id": "australia",
+      "aliases": [
+        "South Australian Colony",
+        "Colony of South Australia"
+      ]
+    },
+    {
+      "id": "victoria_australia",
+      "kind": "polity",
+      "name": "Victoria, Australia",
+      "parent_scope_id": "australia",
+      "aliases": [
+        "Victoria",
+        "Port Phillip Settlement"
+      ]
+    },
+    {
+      "id": "queensland",
+      "kind": "polity",
+      "name": "Queensland",
+      "parent_scope_id": "australia",
+      "aliases": [
+        "Colony of Queensland"
+      ]
+    },
+    {
+      "id": "tasmania",
+      "kind": "polity",
+      "name": "Tasmania",
+      "parent_scope_id": "australia",
+      "aliases": [
+        "Van Diemen's Land",
+        "Colony of Tasmania"
+      ]
+    },
+    {
+      "id": "western_australia",
+      "kind": "polity",
+      "name": "Western Australia",
+      "parent_scope_id": "australia",
+      "aliases": [
+        "Swan River Colony"
+      ]
+    },
+    {
+      "id": "australian_interior_exploration",
+      "kind": "movement",
+      "name": "Australian Interior Exploration",
+      "parent_scope_id": "australia",
+      "aliases": [
+        "Australian exploration movement"
+      ]
+    },
+    {
+      "id": "new_south_wales_corps",
+      "kind": "organization",
+      "name": "New South Wales Corps",
+      "parent_scope_id": "new_south_wales",
+      "aliases": [
+        "NSW Corps"
+      ]
+    },
+    {
+      "id": "victorian_gold_diggers",
+      "kind": "movement",
+      "name": "Victorian Gold Diggers",
+      "parent_scope_id": "victoria_australia",
+      "aliases": [
+        "Victorian gold miners"
+      ]
+    },
+    {
+      "id": "waikato",
+      "kind": "group",
+      "name": "Waikato",
+      "parent_scope_id": "maori",
+      "aliases": [
+        "Waikato Tribe",
+        "Waikato Māori"
+      ]
+    },
+    {
+      "id": "pacific_islanders",
+      "kind": "group",
+      "name": "Pacific Islanders",
+      "parent_scope_id": "oceania",
+      "aliases": [
+        "Indigenous Pacific Islanders",
+        "Pacific Island peoples"
+      ]
+    },
+    {
+      "id": "oceania_decolonization",
+      "kind": "movement",
+      "name": "Oceania Decolonization Movement",
+      "parent_scope_id": "oceania",
+      "aliases": [
+        "Oceania decolonization movement",
+        "Pacific decolonization"
+      ]
+    },
+    {
+      "id": "south_pacific_commission",
+      "kind": "institution",
+      "name": "South Pacific Commission",
+      "parent_scope_id": "oceania",
+      "aliases": [
+        "Pacific Community",
+        "SPC"
+      ]
+    },
+    {
+      "id": "trust_territory_pacific_islands",
+      "kind": "polity",
+      "name": "Trust Territory of the Pacific Islands",
+      "parent_scope_id": "micronesia_region",
+      "aliases": [
+        "TTPI"
+      ]
+    },
+    {
+      "id": "micronesian_society",
+      "kind": "civilization",
+      "name": "Micronesian Society",
+      "parent_scope_id": "micronesia_region",
+      "aliases": [
+        "Micronesian society"
+      ]
+    },
+    {
+      "id": "fijian_affairs_board",
+      "kind": "institution",
+      "name": "Fijian Affairs Board",
+      "parent_scope_id": "fiji",
+      "aliases": [
+        "Fiji Affairs Board"
+      ]
+    },
+    {
+      "id": "western_samoa_legislature",
+      "kind": "institution",
+      "name": "Western Samoa Legislative Assembly",
+      "parent_scope_id": "samoa",
+      "aliases": [
+        "Samoan Legislative Assembly"
+      ]
+    },
+    {
+      "id": "rdpt",
+      "kind": "party",
+      "name": "Rassemblement Démocratique des Populations Tahitiennes",
+      "parent_scope_id": "french_polynesia",
+      "aliases": [
+        "Rassemblement Démocratique des Populations Tahitiennes (RDPT)",
+        "RDPT"
+      ]
+    },
+    {
+      "id": "marching_rule",
+      "kind": "movement",
+      "name": "Marching Rule",
+      "parent_scope_id": "solomon_islands",
+      "aliases": [
+        "Maasina Ruru",
+        "Marching Rule movement"
+      ]
+    },
+    {
+      "id": "australian_liberal_national_coalition",
+      "kind": "faction",
+      "name": "Liberal-National Coalition",
+      "parent_scope_id": "australia",
+      "aliases": [
+        "Liberal-National Party Coalition",
+        "Coalition Australia",
+        "Australian Coalition"
+      ]
+    },
+    {
+      "id": "waitangi_tribunal",
+      "kind": "institution",
+      "name": "Waitangi Tribunal",
+      "parent_scope_id": "new_zealand",
+      "aliases": [
+        "Te Rōpū Whakamana i te Tiriti o Waitangi",
+        "Te Ropu Whakamana i te Tiriti o Waitangi"
+      ]
+    },
+    {
+      "id": "treaty_settlement_process",
+      "kind": "institution",
+      "name": "Treaty of Waitangi Settlement Process",
+      "parent_scope_id": "waitangi_tribunal",
+      "aliases": [
+        "Treaty settlement process",
+        "Waitangi settlement process",
+        "historical claims settlement process"
+      ]
+    },
+    {
+      "id": "raupatu_document_bank",
+      "kind": "institution",
+      "name": "Raupatu Document Bank",
+      "parent_scope_id": "waitangi_tribunal",
+      "aliases": [
+        "Waitangi Tribunal Raupatu Document Bank"
+      ]
+    },
+    {
+      "id": "crown_maori_relations",
+      "kind": "dyad",
+      "name": "Crown-Māori Relations",
+      "aliases": [
+        "Māori-Crown relations",
+        "Crown-Maori relations",
+        "Maori-Crown relations"
+      ]
+    },
+    {
+      "id": "pacific_islands_forum",
+      "kind": "institution",
+      "name": "Pacific Islands Forum",
+      "parent_scope_id": "oceania",
+      "aliases": [
+        "PIF",
+        "South Pacific Forum"
+      ]
+    },
+    {
+      "id": "melanesian_spearhead_group",
+      "kind": "organization",
+      "name": "Melanesian Spearhead Group",
+      "parent_scope_id": "melanesia",
+      "aliases": [
+        "MSG"
+      ]
+    },
+    {
+      "id": "itaukei",
+      "kind": "group",
+      "name": "iTaukei",
+      "parent_scope_id": "fiji",
+      "aliases": [
+        "indigenous Fijians",
+        "ethnic Fijians",
+        "native Fijians"
+      ]
+    },
+    {
+      "id": "indo_fijians",
+      "kind": "group",
+      "name": "Indo-Fijians",
+      "parent_scope_id": "fiji",
+      "aliases": [
+        "Indo-Fijian community",
+        "Fiji Indians",
+        "Indian Fijians"
+      ]
+    },
+    {
+      "id": "fiji_military",
+      "kind": "organization",
+      "name": "Republic of Fiji Military Forces",
+      "parent_scope_id": "fiji",
+      "aliases": [
+        "RFMF",
+        "Fiji military",
+        "Fijian military"
+      ]
+    },
+    {
+      "id": "bougainville",
+      "kind": "polity",
+      "name": "Bougainville",
+      "parent_scope_id": "papua_new_guinea",
+      "aliases": [
+        "Autonomous Region of Bougainville",
+        "Bougainville Island"
+      ]
+    },
+    {
+      "id": "autonomous_bougainville_government",
+      "kind": "institution",
+      "name": "Autonomous Bougainville Government",
+      "parent_scope_id": "bougainville",
+      "aliases": [
+        "Bougainville government",
+        "ABG"
+      ]
+    },
+    {
+      "id": "bougainville_secessionist_movement",
+      "kind": "movement",
+      "name": "Bougainville Secessionist Movement",
+      "parent_scope_id": "bougainville",
+      "aliases": [
+        "Bougainville independence movement",
+        "Bougainville secession movement"
+      ]
+    },
+    {
+      "id": "pangu_party",
+      "kind": "party",
+      "name": "Pangu Party",
+      "parent_scope_id": "papua_new_guinea",
+      "aliases": [
+        "Pangu Pati"
+      ]
+    },
+    {
+      "id": "united_resource_party",
+      "kind": "party",
+      "name": "United Resource Party",
+      "parent_scope_id": "papua_new_guinea",
+      "aliases": [
+        "URP Papua New Guinea"
+      ]
+    },
+    {
+      "id": "png_national_alliance_party",
+      "kind": "party",
+      "name": "National Alliance Party of Papua New Guinea",
+      "parent_scope_id": "papua_new_guinea",
+      "aliases": [
+        "PNG National Alliance Party",
+        "National Alliance Party PNG"
+      ]
+    },
+    {
+      "id": "marshall_islands",
+      "kind": "polity",
+      "name": "Marshall Islands",
+      "parent_scope_id": "micronesia_region",
+      "aliases": [
+        "Republic of the Marshall Islands",
+        "RMI"
+      ]
+    },
+    {
+      "id": "federated_states_micronesia",
+      "kind": "polity",
+      "name": "Federated States of Micronesia",
+      "parent_scope_id": "micronesia_region",
+      "aliases": [
+        "FSM",
+        "Micronesia federation"
+      ]
+    },
+    {
+      "id": "palau",
+      "kind": "polity",
+      "name": "Palau",
+      "parent_scope_id": "micronesia_region",
+      "aliases": [
+        "Republic of Palau",
+        "Belau"
+      ]
+    },
+    {
+      "id": "freely_associated_states",
+      "kind": "institution",
+      "name": "Freely Associated States",
+      "parent_scope_id": "micronesia_region",
+      "aliases": [
+        "FAS",
+        "Compact of Free Association states"
+      ]
+    },
+    {
+      "id": "aukus",
+      "kind": "institution",
+      "name": "AUKUS",
+      "aliases": [
+        "Australia-United Kingdom-United States partnership",
+        "Australia-UK-US partnership"
+      ]
+    },
+    {
+      "id": "quadrilateral_security_dialogue",
+      "kind": "institution",
+      "name": "Quadrilateral Security Dialogue",
+      "aliases": [
+        "Quad",
+        "Indo-Pacific Quad"
       ]
     },
     {
@@ -287,6 +3964,77 @@
       "aliases": [
         "Athens-Sparta dyad",
         "Peloponnesian rivalry"
+      ]
+    },
+    {
+      "id": "taiping_movement",
+      "kind": "movement",
+      "name": "Taiping Movement",
+      "parent_scope_id": "china",
+      "aliases": [
+        "Taiping Heavenly Kingdom",
+        "Taiping Rebellion",
+        "Taiping movement",
+        "Ti-ping movement",
+        "Ti-ping Party",
+        "Ti-pings"
+      ]
+    },
+    {
+      "id": "chartist_movement",
+      "kind": "movement",
+      "name": "Chartist Movement",
+      "parent_scope_id": "uk",
+      "aliases": [
+        "Chartism",
+        "Chartists",
+        "Chartist movement",
+        "People's Charter movement"
+      ]
+    },
+    {
+      "id": "paris_commune",
+      "kind": "movement",
+      "name": "Paris Commune",
+      "parent_scope_id": "france",
+      "aliases": [
+        "Commune of Paris",
+        "Communards",
+        "Paris Commune movement"
+      ]
+    },
+    {
+      "id": "maji_maji_movement",
+      "kind": "movement",
+      "name": "Maji Maji Movement",
+      "parent_scope_id": "german_east_africa",
+      "aliases": [
+        "Maji Maji uprising",
+        "Maji Maji rebellion",
+        "Maji Maji movement"
+      ]
+    },
+    {
+      "id": "uk_womens_suffrage_movement",
+      "kind": "movement",
+      "name": "British Women's Suffrage Movement",
+      "parent_scope_id": "uk",
+      "aliases": [
+        "British women's suffrage movement",
+        "Women's suffrage movement",
+        "Woman's Suffrage Movement",
+        "Woman Suffrage Movement",
+        "Suffragist movement"
+      ]
+    },
+    {
+      "id": "black_lives_matter",
+      "kind": "movement",
+      "name": "Black Lives Matter",
+      "parent_scope_id": "us",
+      "aliases": [
+        "Black Lives Matter movement",
+        "BLM movement"
       ]
     }
   ]

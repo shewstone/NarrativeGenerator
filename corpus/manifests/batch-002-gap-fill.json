@@ -1,0 +1,37 @@
+[
+  {
+    "title": "The Negro",
+    "coverage": "Africa, African diasporas, antiquity to the early twentieth century",
+    "source_page": "https://www.gutenberg.org/ebooks/15359",
+    "url": "https://www.gutenberg.org/cache/epub/15359/pg15359.txt",
+    "filename": "pg15359-the-negro.txt"
+  },
+  {
+    "title": "The Moors in Spain",
+    "coverage": "Al-Andalus and Muslim Iberia, eighth to fifteenth centuries",
+    "source_page": "https://www.gutenberg.org/ebooks/37223",
+    "url": "https://www.gutenberg.org/cache/epub/37223/pg37223.txt",
+    "filename": "pg37223-moors-in-spain.txt"
+  },
+  {
+    "title": "A History of the Philippines",
+    "coverage": "Philippines and maritime Southeast Asia, precolonial to early twentieth century",
+    "source_page": "https://www.gutenberg.org/ebooks/38269",
+    "url": "https://www.gutenberg.org/cache/epub/38269/pg38269.txt",
+    "filename": "pg38269-history-of-philippines.txt"
+  },
+  {
+    "title": "Mexican Archaeology",
+    "coverage": "Aztec, Maya, and other pre-Spanish Mesoamerican civilizations",
+    "source_page": "https://www.gutenberg.org/ebooks/74836",
+    "url": "https://www.gutenberg.org/cache/epub/74836/pg74836.txt",
+    "filename": "pg74836-mexican-archaeology.txt"
+  },
+  {
+    "title": "History of the Incas",
+    "coverage": "Andean and Inca history through the sixteenth-century conquest",
+    "source_page": "https://www.gutenberg.org/ebooks/20218",
+    "url": "https://www.gutenberg.org/cache/epub/20218/pg20218.txt",
+    "filename": "pg20218-history-of-incas.txt"
+  }
+]

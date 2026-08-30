@@ -83,6 +83,8 @@ def maximal_episode() -> Episode:
         summary="Speculative boom collapses into panic and depression",
         start_date=_dt(1929, 10, 24),
         end_date=_dt(1932, 7, 8),
+        start_year=1929,
+        end_year=1932,
         date_precision="day",
         location="United States",
         setting_description="Late-1920s New York financial markets",
@@ -145,6 +147,7 @@ def maximal_episode() -> Episode:
             )
         ],
         extracted_from=["chunk-001", "chunk-002"],
+        source_published_at=_dt(1955, 1, 1),
         created_at=_dt(2026, 7, 10, 12, 0, 0),
         updated_at=_dt(2026, 7, 10, 12, 0, 0),
         version=1,

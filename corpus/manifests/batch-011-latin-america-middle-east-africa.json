@@ -1,0 +1,52 @@
+[
+  {
+    "title": "Mexico: A Country Study",
+    "coverage": "Pre-Columbian and colonial Mexico, independence, revolution, PRI consolidation, opposition growth, and political liberalization through 1996",
+    "source_page": "https://www.loc.gov/item/97013481/",
+    "published_at": "1997-12-31",
+    "include_chunk_ranges": [[0, 9], [27, 32]],
+    "chunks_preselected": true,
+    "url": "https://tile.loc.gov/storage-services/master/frd/frdcstdy/me/mexicocountrystu00merr_0/mexicocountrystu00merr_0_djvu.txt",
+    "filename": "loc-mexico-country-study-1996.txt"
+  },
+  {
+    "title": "Iran: A Country Study",
+    "coverage": "Ancient and imperial inheritance, Qajar decline, constitutionalism, Pahlavi modernization, revolution, Islamic Republic factionalism, and reform through 2008",
+    "source_page": "https://www.loc.gov/item/2008011784/",
+    "published_at": "2008-12-31",
+    "include_chunk_ranges": [[0, 10], [26, 32]],
+    "chunks_preselected": true,
+    "url": "https://tile.loc.gov/storage-services/master/frd/frdcstdy/ir/irancountrystudy00curt_0/irancountrystudy00curt_0_djvu.txt",
+    "filename": "loc-iran-country-study-2008.txt"
+  },
+  {
+    "title": "Indonesia: A Country Study",
+    "coverage": "Maritime kingdoms, colonial rule, nationalism, Japanese occupation, revolution, Sukarno, Suharto, Reformasi, decentralization, and party competition through 2010",
+    "source_page": "https://www.loc.gov/item/2011038834/",
+    "published_at": "2011-12-31",
+    "include_chunk_ranges": [[0, 12], [31, 42]],
+    "chunks_preselected": true,
+    "url": "https://tile.loc.gov/storage-services/master/frd/frdcstdy/in/indonesiacountry00fred/indonesiacountry00fred_djvu.txt",
+    "filename": "loc-indonesia-country-study-2011.txt"
+  },
+  {
+    "title": "Nigeria: A Country Study",
+    "coverage": "Precolonial states, colonial amalgamation, nationalist parties, independence, civil war, military rule, and the contested transition through 1991",
+    "source_page": "https://www.loc.gov/item/92009026/",
+    "published_at": "1992-12-31",
+    "include_chunk_ranges": [[0, 20], [27, 33]],
+    "chunks_preselected": true,
+    "url": "https://tile.loc.gov/storage-services/master/frd/frdcstdy/ni/nigeriacountryst00metz_0/nigeriacountryst00metz_0_djvu.txt",
+    "filename": "loc-nigeria-country-study-1991.txt"
+  },
+  {
+    "title": "Egypt: A Country Study",
+    "coverage": "Ancient inheritance, Ottoman and British domination, nationalism, the Free Officers, Nasserism, Sadat's realignment, Mubarak, and party-state opposition through 1990",
+    "source_page": "https://www.loc.gov/item/91029876/",
+    "published_at": "1991-12-31",
+    "include_chunk_ranges": [[0, 12], [32, 41]],
+    "chunks_preselected": true,
+    "url": "https://tile.loc.gov/storage-services/master/frd/frdcstdy/eg/egyptcountrystud00metz/egyptcountrystud00metz_djvu.txt",
+    "filename": "loc-egypt-country-study-1990.txt"
+  }
+]

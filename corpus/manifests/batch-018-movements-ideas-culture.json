@@ -1,0 +1,52 @@
+[
+  {
+    "title": "Women's Voices, Women's Votes: Nineteenth Amendment Centennial Commemoration",
+    "coverage": "Historical synthesis of the U.S. women's suffrage movement, including its formation, internal divisions, racial exclusions, opposition, the Nineteenth Amendment, and the movement's continuing legacy",
+    "source_page": "https://www.nps.gov/subjects/womenshistory/19th-amendment-centennial.htm",
+    "published_at": "2021-01-01",
+    "include_chunk_ranges": [[4, 4]],
+    "chunks_preselected": true,
+    "url": "https://www.nps.gov/subjects/womenshistory/upload/19th-Amendment-Report_Final_Reduced.pdf",
+    "filename": "nps-womens-voices-womens-votes-2021.pdf"
+  },
+  {
+    "title": "Civil Rights in America: Racial Desegregation of Public Accommodations",
+    "coverage": "Independent historical study of the modern U.S. civil-rights movement from wartime organizing through boycotts, sit-ins, Freedom Rides, mass mobilization, countermobilization, and the Civil Rights Act of 1964",
+    "source_page": "https://www.nps.gov/subjects/nationalhistoriclandmarks/civil-rights-framework.htm",
+    "published_at": "2009-01-01",
+    "include_chunk_ranges": [[7, 17]],
+    "chunks_preselected": true,
+    "url": "https://irma.nps.gov/DataStore/DownloadFile/700967",
+    "filename": "nps-civil-rights-public-accommodations-2009.pdf"
+  },
+  {
+    "title": "Religion in Latin America: Widespread Change in a Historically Catholic Region",
+    "coverage": "Cross-national evidence on the long decline of Catholic affiliation and rise of Protestant, especially Pentecostal, and unaffiliated identities across Latin America, including conversion motives, practice, politics, and indigenous and Afro-diasporic beliefs",
+    "source_page": "https://www.pewresearch.org/religion/2014/11/13/religion-in-latin-america/",
+    "published_at": "2014-11-13",
+    "include_chunk_ranges": [[0, 3]],
+    "chunks_preselected": true,
+    "url": "https://www.pewresearch.org/wp-content/uploads/sites/20/2014/11/Religion-in-Latin-America-11-12-PM-full-PDF.pdf",
+    "filename": "pew-religion-latin-america-2014.pdf"
+  },
+  {
+    "title": "Pocket Guide to South Africa 2010/11: History",
+    "coverage": "South African government historical overview tracing colonial conquest, segregation and apartheid, the formation and changing strategy of the ANC and rival movements, mass resistance, negotiated transition, and democratic consolidation",
+    "source_page": "https://www.gcis.gov.za/content/resourcecentre/sa-info/pocketguide/2010-11",
+    "published_at": "2011-01-01",
+    "include_chunk_ranges": [[0, 0]],
+    "chunks_preselected": true,
+    "url": "https://www.gcis.gov.za/sites/www.gcis.gov.za/files/docs/resourcecentre/pocketguide/2010/004_history.pdf",
+    "filename": "south-africa-pocket-history-2011.pdf"
+  },
+  {
+    "title": "Support for the Black Lives Matter Movement Has Dropped Considerably From Its Peak in 2020",
+    "coverage": "Longitudinal evidence on the rapid rise, broadening, partisan divergence, and subsequent decline of support for Black Lives Matter from 2020 to 2023, alongside perceptions of the movement's effectiveness and effects on racial discourse",
+    "source_page": "https://www.pewresearch.org/social-trends/2023/06/14/support-for-the-black-lives-matter-movement-has-dropped-considerably-from-its-peak-in-2020/",
+    "published_at": "2023-06-14",
+    "include_chunk_ranges": [[0, 2]],
+    "chunks_preselected": true,
+    "url": "https://www.pewresearch.org/social-trends/wp-content/uploads/sites/3/2023/06/ST_2023.06.14_BLM-Support_Report.pdf",
+    "filename": "pew-black-lives-matter-2023.pdf"
+  }
+]

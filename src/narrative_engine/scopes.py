@@ -20,6 +20,9 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
+from dataclasses import dataclass
+from difflib import SequenceMatcher
 from functools import lru_cache
 from importlib import resources
 from typing import Dict, List, Optional
@@ -36,9 +39,24 @@ _ARTICLE_PREFIXES = ("the ",)
 DEFAULT_SCOPE_CONFIDENCE_FLOOR = 0.6
 
 
+@dataclass(frozen=True)
+class ScopeSuggestion:
+    """A retrieval candidate, not a canonicalization decision."""
+
+    scope: Scope
+    score: float
+
+
 def _normalize(raw: str) -> str:
-    """Casefold, strip punctuation/articles, collapse whitespace."""
-    text = raw.casefold().strip()
+    """Casefold, transliterate diacritics, strip punctuation, and space-fold.
+
+    Gutenberg texts frequently represent the same name using either Unicode
+    macrons (``Rahmān``) or ASCII markup (``Rahm[=a]n``).  Removing combining
+    marks before punctuation gives both forms one conservative exact key
+    without introducing fuzzy matching between genuinely different names.
+    """
+    text = unicodedata.normalize("NFKD", raw.casefold().strip())
+    text = "".join(character for character in text if not unicodedata.combining(character))
     for prefix in _ARTICLE_PREFIXES:
         if text.startswith(prefix):
             text = text[len(prefix) :]
@@ -61,6 +79,10 @@ class ScopeRegistry:
         self.version = version
         self._by_id: Dict[str, Scope] = {s.id: s for s in scopes}
         self._alias_to_id: Dict[str, str] = {}
+        # Visualization/composition can ask about the same unresolved raw
+        # scope many times. Log it once per process so a dashboard refresh
+        # cannot amplify O(episodes × edges) messages into a disk leak.
+        self._unresolved_logged: set[str] = set()
         for scope in scopes:
             for alias in [scope.id, scope.name, *scope.aliases]:
                 key = _normalize(alias)
@@ -101,8 +123,10 @@ class ScopeRegistry:
         """
         if not raw:
             return None
-        scope_id = self._alias_to_id.get(_normalize(raw))
-        if scope_id is None:
+        normalized = _normalize(raw)
+        scope_id = self._alias_to_id.get(normalized)
+        if scope_id is None and normalized not in self._unresolved_logged:
+            self._unresolved_logged.add(normalized)
             logger.info("scope_unresolved", raw=raw)
         return scope_id
 
@@ -111,6 +135,49 @@ class ScopeRegistry:
 
     def all(self) -> List[Scope]:
         return list(self._by_id.values())
+
+    def suggest(
+        self,
+        raw: str,
+        *,
+        kind: Optional[str] = None,
+        parent_name: Optional[str] = None,
+        limit: int = 5,
+    ) -> List[ScopeSuggestion]:
+        """Retrieve plausible registry entries for constrained resolution.
+
+        Suggestions are deliberately not promoted automatically. They bound
+        a later model decision to known ids while exact alias resolution
+        remains the only zero-cost canonicalization path.
+        """
+        query = _normalize(raw)
+        if not query or limit <= 0:
+            return []
+        query_tokens = set(query.split())
+        parent_id = self.resolve(parent_name) if parent_name else None
+        suggestions: List[ScopeSuggestion] = []
+
+        for scope in self._by_id.values():
+            aliases = [scope.id, scope.name, *scope.aliases]
+            normalized_aliases = [_normalize(alias) for alias in aliases]
+            score = 0.0
+            for alias in normalized_aliases:
+                alias_tokens = set(alias.split())
+                sequence = SequenceMatcher(None, query, alias).ratio()
+                union = query_tokens | alias_tokens
+                token_overlap = len(query_tokens & alias_tokens) / len(union) if union else 0.0
+                containment = 0.88 if query in alias or alias in query else 0.0
+                score = max(score, sequence, token_overlap, containment)
+
+            if kind and scope.kind.value == kind:
+                score = min(1.0, score + 0.06)
+            if parent_id and scope.parent_scope_id == parent_id:
+                score = min(1.0, score + 0.08)
+            if score >= 0.42:
+                suggestions.append(ScopeSuggestion(scope=scope, score=round(score, 4)))
+
+        suggestions.sort(key=lambda candidate: (-candidate.score, candidate.scope.name))
+        return suggestions[:limit]
 
     def lineage(self, raw: Optional[str]) -> List[Scope]:
         """Return focal scope followed by each containing parent.
@@ -151,6 +218,17 @@ def get_registry() -> ScopeRegistry:
 def resolve_scope(raw: Optional[str]) -> Optional[str]:
     """Module-level convenience wrapper over the packaged registry."""
     return get_registry().resolve(raw)
+
+
+def suggest_scopes(
+    raw: str,
+    *,
+    kind: Optional[str] = None,
+    parent_name: Optional[str] = None,
+    limit: int = 5,
+) -> List[ScopeSuggestion]:
+    """Module-level candidate retrieval for the constrained LLM stage."""
+    return get_registry().suggest(raw, kind=kind, parent_name=parent_name, limit=limit)
 
 
 def scope_registry_version() -> str:

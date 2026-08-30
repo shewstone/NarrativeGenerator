@@ -62,6 +62,7 @@ def _resolved_analog(i: int, year: int) -> Episode:
         resolution="Market crashed and a severe contraction followed",
         consequences=["bank failures"],
         extracted_from=[f"book-{i}"],
+        source_published_at=datetime(year + 1, 12, 31, tzinfo=UTC),
     )
 
 
@@ -107,7 +108,9 @@ class TestMaskedEndingHarness:
             db_session, corpus, CUTOFF, embedder=DeterministicEmbedder(), k=8
         )
 
-        assert report.corpus_size == 6  # post-cutoff episode dropped
+        # Five publication-dated analogs. The unknown-date query and
+        # post-cutoff episode never enter the strict analog snapshot.
+        assert report.corpus_size == 5
         assert len(report.cases) == 1
 
         case = report.cases[0]
@@ -118,6 +121,7 @@ class TestMaskedEndingHarness:
         assert 0.0 <= case.persistence_brier <= 1.0
 
         summary = report.summary()
+        assert summary["source_dates_required"] is True
         assert summary["scored"] == 1
         assert summary["mean_persistence_brier"] is not None
         assert summary["skill_vs_persistence"] is not None
@@ -141,12 +145,10 @@ class TestMaskedEndingHarness:
         ).scalar()
         assert count == 0
 
-        # Canary 2: the test case's row carries no outcome fields.
+        # Canary 2: the unknown-publication-date test case cannot enter the
+        # strict analog snapshot (it is still used as the held-out query).
         row = await db_session.get(EpisodeORM, test_case.id)
-        assert row is not None
-        assert row.resolution is None
-        assert row.consequences == []
-        assert row.end_date is None
+        assert row is None
 
         # Canary 3: every resolved row in the snapshot resolved pre-cutoff.
         resolved = (

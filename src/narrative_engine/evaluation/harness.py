@@ -31,7 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from narrative_engine.evaluation.backtest import BacktestEngine
 from narrative_engine.evaluation.baselines import PersistenceBaseline
-from narrative_engine.evaluation.masking import mask_corpus_at, mask_episode_at
+from narrative_engine.evaluation.masking import is_after_cutoff, mask_corpus_at, mask_episode_at
 from narrative_engine.evaluation.metrics import BrierScore
 from narrative_engine.logging_config import get_logger
 from narrative_engine.models import Episode
@@ -64,6 +64,7 @@ class CaseResult:
 class HarnessReport:
     cutoff: datetime
     corpus_size: int
+    source_dates_required: bool = True
     cases: List[CaseResult] = field(default_factory=list)
 
     @property
@@ -82,6 +83,7 @@ class HarnessReport:
         return {
             "cutoff": self.cutoff.isoformat(),
             "corpus_size": self.corpus_size,
+            "source_dates_required": self.source_dates_required,
             "cases": len(self.cases),
             "scored": len(scored),
             "no_forecast": len(self.cases) - len(scored),
@@ -97,9 +99,18 @@ def _assert_no_leakage(analogs, cutoff: datetime) -> None:
     """Hard canary: every analog must be knowable at the cutoff."""
     for analog in analogs:
         episode = analog.episode
-        if episode.start_date is not None and episode.start_date > cutoff:
+        if episode.start_date is not None and is_after_cutoff(episode.start_date, cutoff):
             raise LeakageError(f"Analog {episode.title!r} starts after cutoff {cutoff:%Y-%m-%d}")
-        if episode.resolution is not None and (episode.end_date is None or episode.end_date > cutoff):
+        if episode.source_published_at is not None and is_after_cutoff(
+            episode.source_published_at, cutoff
+        ):
+            raise LeakageError(
+                f"Analog {episode.title!r} comes from a source published after "
+                f"cutoff {cutoff:%Y-%m-%d}"
+            )
+        if episode.resolution is not None and (
+            episode.end_date is None or is_after_cutoff(episode.end_date, cutoff)
+        ):
             raise LeakageError(
                 f"Analog {episode.title!r} carries a resolution not knowable " f"at cutoff {cutoff:%Y-%m-%d}"
             )
@@ -110,6 +121,8 @@ async def load_masked_corpus(
     corpus: Sequence[Episode],
     cutoff: datetime,
     embedder,
+    *,
+    require_source_dates: bool = True,
 ) -> int:
     """Snapshot the corpus at `cutoff` into the session's database.
 
@@ -117,7 +130,11 @@ async def load_masked_corpus(
     outcomes BEFORE anything touches the DB, so downstream code physically
     cannot read them (Sec 6.6: data layer, not prompt layer).
     """
-    masked = mask_corpus_at(corpus, cutoff)
+    masked = mask_corpus_at(
+        corpus,
+        cutoff,
+        require_source_dates=require_source_dates,
+    )
     repo = EpisodeRepository(session)
     for episode in masked:
         await repo.create(episode)
@@ -137,6 +154,7 @@ async def run_backtest(
     embedder=None,
     k: int = 10,
     min_analogs: int = 3,
+    require_source_dates: bool = True,
 ) -> HarnessReport:
     """Run the full masked-ending loop over one corpus snapshot.
 
@@ -149,7 +167,13 @@ async def run_backtest(
 
         embedder = EmbeddingGenerator()
 
-    corpus_size = await load_masked_corpus(session, corpus, cutoff, embedder)
+    corpus_size = await load_masked_corpus(
+        session,
+        corpus,
+        cutoff,
+        embedder,
+        require_source_dates=require_source_dates,
+    )
 
     # A backtest over mixed embedding epochs is uninterpretable (T4).
     fraction = await stale_fraction(session)
@@ -180,7 +204,11 @@ async def run_backtest(
     scorer = BacktestEngine()
     persistence = PersistenceBaseline()
 
-    report = HarnessReport(cutoff=cutoff, corpus_size=corpus_size)
+    report = HarnessReport(
+        cutoff=cutoff,
+        corpus_size=corpus_size,
+        source_dates_required=require_source_dates,
+    )
 
     for original in test_cases:
         masked_query = mask_episode_at(original, cutoff)

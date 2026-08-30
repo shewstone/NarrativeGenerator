@@ -1,0 +1,52 @@
+[
+  {
+    "url": "https://www.gutenberg.org/ebooks/39563.txt.utf-8",
+    "filename": "pg39563-german-revolution-1918.txt",
+    "title": "And the Kaiser Abdicates: The German Revolution, November 1918-August 1919",
+    "source_page": "https://www.gutenberg.org/ebooks/39563",
+    "published_at": "1921-09-30",
+    "coverage": "Imperial Germany's wartime strains, the November Revolution, competing socialist movements, the Kaiser's abdication, Spartacist uprisings, National Assembly, and formation of the Weimar constitutional order",
+    "include_chunk_ranges": [[0, 20]],
+    "chunks_preselected": true
+  },
+  {
+    "url": "https://www.gutenberg.org/ebooks/32715.txt.utf-8",
+    "filename": "pg32715-third-french-republic.txt",
+    "title": "A History of the Third French Republic",
+    "source_page": "https://www.gutenberg.org/ebooks/32715",
+    "published_at": "1916-05-31",
+    "coverage": "The Franco-Prussian defeat, fall of the Second Empire, Paris Commune, conservative-republican struggle, republican consolidation, Boulangism, Dreyfus affair, church-state conflict, and prewar political order",
+    "include_chunk_ranges": [[0, 9]],
+    "chunks_preselected": true
+  },
+  {
+    "url": "https://www.gutenberg.org/ebooks/73851.txt.utf-8",
+    "filename": "pg73851-brazil-empire-republic.txt",
+    "title": "Brazil Today and Tomorrow: Historical and Social Selections",
+    "source_page": "https://www.gutenberg.org/ebooks/73851",
+    "published_at": "1922-12-31",
+    "coverage": "Colonial expansion, independence, imperial consolidation, abolition, fall of the monarchy, formation and early crises of the republic, regional power, migration, race, education, press, and social organization",
+    "include_chunk_ranges": [[0, 10]],
+    "chunks_preselected": true
+  },
+  {
+    "url": "https://www.gutenberg.org/ebooks/51329.txt.utf-8",
+    "filename": "pg51329-young-turk-revolution-1908.txt",
+    "title": "Turkey: The Awakening of Turkey and the Turkish Revolution of 1908",
+    "source_page": "https://www.gutenberg.org/ebooks/51329",
+    "published_at": "1910-12-31",
+    "coverage": "Ottoman reform and reaction, the rise and organization of the Young Turks, military discontent, the 1908 revolution, constitutional government, counterrevolution, parliament, and deposition of Abdul Hamid II",
+    "include_chunk_ranges": [[2, 20]],
+    "chunks_preselected": true
+  },
+  {
+    "url": "https://www.ssoar.info/ssoar/bitstream/handle/document/33732/ssoar-2002-gouda_et_al-American_Visions_of_the_Netherlands.pdf?isAllowed=y&lnkname=ssoar-2002-gouda_et_al-American_Visions_of_the_Netherlands.pdf&sequence=1",
+    "filename": "ssoar-indonesia-nationalism-1920-1949.pdf",
+    "title": "American Visions of the Netherlands East Indies/Indonesia: US Foreign Policy and Indonesian Nationalism, 1920-1949",
+    "source_page": "https://www.ssoar.info/ssoar/handle/document/33732",
+    "published_at": "2002-12-31",
+    "coverage": "Indonesian nationalism under Dutch rule, Japanese occupation, formation of the republic, armed and diplomatic struggle, internal party conflict, international mediation, the Madiun crisis, and recognition of independence",
+    "include_chunk_ranges": [[10, 25], [30, 51]],
+    "chunks_preselected": true
+  }
+]

@@ -1,0 +1,52 @@
+[
+  {
+    "title": "Australia: Background and U.S. Relations",
+    "coverage": "Australian political institutions, Labor and the Liberal-National Coalition, the 2023 Indigenous Voice referendum, strategic realignment toward AUKUS and the Quad, China relations, climate policy, and regional engagement through 2024",
+    "source_page": "https://www.congress.gov/crs-product/IF10491",
+    "published_at": "2024-07-29",
+    "include_chunk_ranges": [[0, 0]],
+    "chunks_preselected": true,
+    "url": "https://www.congress.gov/crs_external_products/IF/PDF/IF10491/IF10491.11.pdf",
+    "filename": "crs-australia-2024.pdf"
+  },
+  {
+    "title": "Te Manutukutuku: Waitangi Tribunal 50th Anniversary Edition",
+    "coverage": "The Waitangi Tribunal's formation in 1975, expansion to historical claims, Māori-Crown relations, major inquiries and settlements, institutional evolution, urgency jurisdiction, kaupapa inquiries, and strategic direction through 2026",
+    "source_page": "https://www.waitangitribunal.govt.nz/assets/Te-Manutukutuku/Te-Manutukutuku-Issue-84-50th-edition.pdf",
+    "published_at": "2026-05-07",
+    "include_chunk_ranges": [[0, 11]],
+    "chunks_preselected": true,
+    "url": "https://www.waitangitribunal.govt.nz/assets/Te-Manutukutuku/Te-Manutukutuku-Issue-84-50th-edition.pdf",
+    "filename": "waitangi-tribunal-50-years-2026.pdf"
+  },
+  {
+    "title": "Fiji: Background and Issues Facing Congress",
+    "coverage": "Fiji's independence, iTaukei and Indo-Fijian institutional tensions, the 1987, 2000, and 2006 coups, military influence, return to elected government, regional leadership, and international alignment through 2024",
+    "source_page": "https://www.congress.gov/crs-product/IF12831",
+    "published_at": "2024-11-29",
+    "include_chunk_ranges": [[0, 0]],
+    "chunks_preselected": true,
+    "url": "https://www.congress.gov/crs_external_products/IF/PDF/IF12831/IF12831.2.pdf",
+    "filename": "crs-fiji-2024.pdf"
+  },
+  {
+    "title": "Papua New Guinea",
+    "coverage": "Papua New Guinea's independence and coalition politics, Pangu and allied parties, state capacity, resource dependence, Bougainville's secessionist war, autonomy, referendum, and independence negotiations through 2022",
+    "source_page": "https://www.congress.gov/crs-product/IF11255",
+    "published_at": "2022-04-04",
+    "include_chunk_ranges": [[0, 0]],
+    "chunks_preselected": true,
+    "url": "https://www.congress.gov/crs_external_products/IF/PDF/IF11255/IF11255.4.pdf",
+    "filename": "crs-papua-new-guinea-2022.pdf"
+  },
+  {
+    "title": "The Pacific Islands: Background and Issues for Congress",
+    "coverage": "Pacific regional institutions and subregions, U.S. and Chinese strategic competition, renewed diplomacy, the Freely Associated States, security and climate pressures, fisheries, and Pacific Islands Forum priorities through 2024",
+    "source_page": "https://www.congress.gov/crs-product/IF11208",
+    "published_at": "2024-11-07",
+    "include_chunk_ranges": [[0, 0]],
+    "chunks_preselected": true,
+    "url": "https://www.congress.gov/crs_external_products/IF/PDF/IF11208/IF11208.16.pdf",
+    "filename": "crs-pacific-islands-2024.pdf"
+  }
+]

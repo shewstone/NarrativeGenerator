@@ -1,3 +1,9 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -9,6 +15,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    logging: *default-logging
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -25,15 +32,22 @@ services:
       TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/narrative_engine_test
       NE_LLM_PROVIDER: ${NE_LLM_PROVIDER:-openai}
       NE_LLM_BASE_URL: ${NE_LLM_BASE_URL:-https://api.venice.ai/api/v1}
-      NE_LLM_MODEL: ${NE_LLM_MODEL:-zai-org-glm-5-1}
+      NE_LLM_MODEL: ${NE_LLM_MODEL:-zai-org-glm-5-2}
       NE_LLM_REASONING_EFFORT: ${NE_LLM_REASONING_EFFORT:-none}
-      NE_SEG_MODEL: ${NE_SEG_MODEL:-zai-org-glm-4.7-flash}
-      NE_EXTRACT_MODEL: ${NE_EXTRACT_MODEL:-zai-org-glm-5-1}
-      NE_CLASSIFY_MODEL: ${NE_CLASSIFY_MODEL:-deepseek-v3.2}
-      NE_LINK_MODEL: ${NE_LINK_MODEL:-deepseek-v3.2}
+      NE_LLM_REQUEST_TIMEOUT_SECONDS: ${NE_LLM_REQUEST_TIMEOUT_SECONDS:-90}
+      NE_SEG_MODEL: ${NE_SEG_MODEL:-mistral-small-3-2-24b-instruct}
+      NE_SCOPE_MODEL: ${NE_SCOPE_MODEL:-mistral-small-3-2-24b-instruct}
+      NE_ENABLE_SEGMENTATION: ${NE_ENABLE_SEGMENTATION:-true}
+      NE_EXTRACT_MODEL: ${NE_EXTRACT_MODEL:-zai-org-glm-5-2}
+      NE_RECONCILE_MODEL: ${NE_RECONCILE_MODEL:-zai-org-glm-5-2}
+      NE_CLASSIFY_MODEL: ${NE_CLASSIFY_MODEL:-deepseek-v4-flash-0731-fast}
+      NE_LINK_MODEL: ${NE_LINK_MODEL:-deepseek-v4-flash-0731}
+      NE_ENABLE_CHUNK_LINKING: ${NE_ENABLE_CHUNK_LINKING:-false}
+      NE_STAGE_CONCURRENCY: ${NE_STAGE_CONCURRENCY:-3}
       NE_LINK_NEIGHBOR_WINDOW: ${NE_LINK_NEIGHBOR_WINDOW:-1}
       NE_LINK_MAX_YEAR_GAP: ${NE_LINK_MAX_YEAR_GAP:-25}
       NE_LINK_MIN_LEXICAL_OVERLAP: ${NE_LINK_MIN_LEXICAL_OVERLAP:-0.2}
+      NE_CROSS_LINK_MAX_PAIRS: ${NE_CROSS_LINK_MAX_PAIRS:-20}
       NE_TAU_CLASS: ${NE_TAU_CLASS:-0.5}
       NE_TAU_ROLE: ${NE_TAU_ROLE:-0.5}
       NE_TAU_SCOPE: ${NE_TAU_SCOPE:-0.6}
@@ -41,6 +55,8 @@ services:
     volumes:
       - ./src:/app/src
       - ./tests:/app/tests
+      - ./scripts:/app/scripts:ro
+    logging: *default-logging
     depends_on:
       db:
         condition: service_healthy
@@ -56,17 +72,25 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/narrative_engine
       NE_WATCH_DIR: /app/data/raw
+      NE_DOCUMENT_LEASE_SECONDS: ${NE_DOCUMENT_LEASE_SECONDS:-180}
       NE_LLM_PROVIDER: ${NE_LLM_PROVIDER:-openai}
       NE_LLM_BASE_URL: ${NE_LLM_BASE_URL:-https://api.venice.ai/api/v1}
-      NE_LLM_MODEL: ${NE_LLM_MODEL:-zai-org-glm-5-1}
+      NE_LLM_MODEL: ${NE_LLM_MODEL:-zai-org-glm-5-2}
       NE_LLM_REASONING_EFFORT: ${NE_LLM_REASONING_EFFORT:-none}
-      NE_SEG_MODEL: ${NE_SEG_MODEL:-zai-org-glm-4.7-flash}
-      NE_EXTRACT_MODEL: ${NE_EXTRACT_MODEL:-zai-org-glm-5-1}
-      NE_CLASSIFY_MODEL: ${NE_CLASSIFY_MODEL:-deepseek-v3.2}
-      NE_LINK_MODEL: ${NE_LINK_MODEL:-deepseek-v3.2}
+      NE_LLM_REQUEST_TIMEOUT_SECONDS: ${NE_LLM_REQUEST_TIMEOUT_SECONDS:-90}
+      NE_SEG_MODEL: ${NE_SEG_MODEL:-mistral-small-3-2-24b-instruct}
+      NE_SCOPE_MODEL: ${NE_SCOPE_MODEL:-mistral-small-3-2-24b-instruct}
+      NE_ENABLE_SEGMENTATION: ${NE_ENABLE_SEGMENTATION:-true}
+      NE_EXTRACT_MODEL: ${NE_EXTRACT_MODEL:-zai-org-glm-5-2}
+      NE_RECONCILE_MODEL: ${NE_RECONCILE_MODEL:-zai-org-glm-5-2}
+      NE_CLASSIFY_MODEL: ${NE_CLASSIFY_MODEL:-deepseek-v4-flash-0731-fast}
+      NE_LINK_MODEL: ${NE_LINK_MODEL:-deepseek-v4-flash-0731}
+      NE_ENABLE_CHUNK_LINKING: ${NE_ENABLE_CHUNK_LINKING:-false}
+      NE_STAGE_CONCURRENCY: ${NE_STAGE_CONCURRENCY:-3}
       NE_LINK_NEIGHBOR_WINDOW: ${NE_LINK_NEIGHBOR_WINDOW:-1}
       NE_LINK_MAX_YEAR_GAP: ${NE_LINK_MAX_YEAR_GAP:-25}
       NE_LINK_MIN_LEXICAL_OVERLAP: ${NE_LINK_MIN_LEXICAL_OVERLAP:-0.2}
+      NE_CROSS_LINK_MAX_PAIRS: ${NE_CROSS_LINK_MAX_PAIRS:-20}
       NE_TAU_CLASS: ${NE_TAU_CLASS:-0.5}
       NE_TAU_ROLE: ${NE_TAU_ROLE:-0.5}
       NE_TAU_SCOPE: ${NE_TAU_SCOPE:-0.6}
@@ -81,6 +105,7 @@ services:
       - ./src:/app/src
       - ./data:/app/data
       - ./alembic:/app/alembic
+    logging: *default-logging
     ports:
       - "8000:8000"
     depends_on:

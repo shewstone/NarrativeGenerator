@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 from contextlib import asynccontextmanager, suppress
 from importlib import resources
 from typing import Annotated, AsyncGenerator, Optional
@@ -21,9 +22,15 @@ import numpy as np
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from narrative_engine.composition.formation import (
+    FORMED_ARC_MIN_EPISODES,
+    FORMED_ARC_MIN_PHASES,
+    arc_formation_gaps,
+    arc_formation_status,
+)
 from narrative_engine.logging_config import get_logger
 from narrative_engine.scopes import (
     DEFAULT_SCOPE_CONFIDENCE_FLOOR,
@@ -35,7 +42,9 @@ from narrative_engine.storage.orm_models import (
     CycleORM,
     EpisodeLinkORM,
     EpisodeORM,
+    ExtractionRecordORM,
     SourceDocumentORM,
+    SourcePassageORM,
 )
 from narrative_engine.storage.repositories import SourceDocumentRepository
 
@@ -61,6 +70,169 @@ def _cosine_similarities(vectors: np.ndarray) -> np.ndarray:
     norms = np.linalg.norm(vectors, axis=1, keepdims=True)
     normalized = np.divide(vectors, norms, out=np.zeros_like(vectors), where=norms != 0)
     return normalized @ normalized.T
+
+
+def _episode_start_year(episode: EpisodeORM) -> Optional[int]:
+    """Return the signed chronology key, including pre-migration CE rows."""
+    if episode.start_year is not None:
+        return episode.start_year
+    return episode.start_date.year if episode.start_date else None
+
+
+def _episode_end_year(episode: EpisodeORM) -> Optional[int]:
+    if episode.end_year is not None:
+        return episode.end_year
+    return episode.end_date.year if episode.end_date else None
+
+
+def _episode_temporal_key(episode: EpisodeORM) -> tuple:
+    year = _episode_start_year(episode)
+    return (
+        year is None,
+        year or 0,
+        episode.start_date.isoformat() if episode.start_date else "",
+        episode.created_at.isoformat(),
+    )
+
+
+def _episode_scope_path(episode: EpisodeORM) -> list[str]:
+    """Resolve the most useful human-readable scope lineage for the UI."""
+    scope_registry = get_registry()
+    registered_lineage = scope_registry.lineage(episode.scope_id or episode.scope_name)
+    if registered_lineage:
+        return [scope.name for scope in reversed(registered_lineage)]
+
+    parent_lineage = scope_registry.lineage(episode.parent_scope_name)
+    scope_path = [scope.name for scope in reversed(parent_lineage)]
+    if episode.scope_name and episode.scope_name not in scope_path:
+        scope_path.append(episode.scope_name)
+    if not scope_path:
+        scope_path = [label for label in (episode.parent_scope_name, episode.scope_name) if label]
+    return scope_path
+
+
+def _source_work_id(chunk_id: str) -> str:
+    """Collapse the ingestion chunk suffix to a stable source-work key."""
+    return re.sub(r"_[0-9]+$", "", chunk_id)
+
+
+def _arc_quality(
+    membership_episodes: list[tuple[CycleMembershipORM, EpisodeORM]],
+) -> dict:
+    """Derive evidence maturity without discarding composition candidates."""
+    active = [
+        (membership, episode)
+        for membership, episode in membership_episodes
+        if membership.review_status != "rejected"
+    ]
+    episode_count = len({episode.id for _, episode in active})
+    phases = {episode.arc_phase.value for _, episode in active if episode.arc_phase}
+    source_works = {
+        _source_work_id(chunk_id)
+        for _, episode in active
+        for chunk_id in (episode.extracted_from or [])
+        if chunk_id
+    }
+    reviewed_count = sum(membership.review_status == "approved" for membership, _ in active)
+    pending_count = sum(membership.review_status == "pending" for membership, _ in active)
+    status = arc_formation_status(episode_count, len(phases))
+    return {
+        "formation_status": status,
+        "formation_gaps": arc_formation_gaps(episode_count, len(phases)),
+        "episode_count": episode_count,
+        "phase_count": len(phases),
+        "source_count": len(source_works),
+        "cross_source": len(source_works) >= 2,
+        "reviewed_count": reviewed_count,
+        "pending_count": pending_count,
+        "human_reviewed": bool(active) and reviewed_count == len(active),
+    }
+
+
+def _episode_payload(
+    episode: EpisodeORM,
+    episode_memberships: list[tuple[CycleMembershipORM, CycleORM]] | None = None,
+    coordinates: tuple[float, float, float] | None = None,
+    arc_quality_by_cycle: dict[UUID, dict] | None = None,
+) -> dict:
+    """Serialize one episode for the dashboard's coordinated views.
+
+    Coordinates are optional so the chronological views can load every
+    episode without paying the memory and CPU cost of a full PCA projection.
+    """
+    payload = {
+        "id": str(episode.id),
+        "title": episode.title,
+        "summary": episode.summary,
+        "arc_type": episode.arc_type.value if episode.arc_type else None,
+        "phase": episode.arc_phase.value if episode.arc_phase else None,
+        "confidence": float(episode.phase_confidence or 0.0),
+        "classification_state": episode.classification_state,
+        "start_date": episode.start_date.isoformat() if episode.start_date else None,
+        "end_date": episode.end_date.isoformat() if episode.end_date else None,
+        "start_year": _episode_start_year(episode),
+        "end_year": _episode_end_year(episode),
+        "scope_id": episode.scope_id,
+        "scope_name": episode.scope_name,
+        "scope_kind": episode.scope_kind,
+        "parent_scope_name": episode.parent_scope_name,
+        "scope_confidence": episode.scope_confidence,
+        "scope_evidence": episode.scope_evidence,
+        "scope_notes": episode.scope_notes,
+        "scope_path": _episode_scope_path(episode),
+        "location": episode.location,
+        "change_pattern": episode.change_pattern,
+        "pattern_confidence": float(episode.pattern_confidence or 0.0),
+        "pattern_rationale": episode.pattern_rationale,
+        "situation_scale": episode.situation_scale,
+        "domains": list(episode.domains or []),
+        "configuration": dict(episode.configuration or {}),
+        "mechanism_families": list(episode.mechanism_families or []),
+        "mechanisms": list(episode.mechanism_tags or []),
+        "source_chunks": list(episode.extracted_from or []),
+        "source_published_at": (
+            episode.source_published_at.isoformat() if episode.source_published_at else None
+        ),
+        "arc_instances": [
+            {
+                "id": str(cycle.id),
+                "name": cycle.name,
+                "link_status": membership.link_status,
+                "review_status": membership.review_status,
+                **((arc_quality_by_cycle or {}).get(cycle.id) or {}),
+            }
+            for membership, cycle in (episode_memberships or [])
+        ],
+    }
+    if coordinates is not None:
+        payload.update(zip(("x", "y", "z"), coordinates, strict=True))
+    return payload
+
+
+async def _arc_quality_for_cycles(
+    session: AsyncSession,
+    cycle_ids: set[UUID] | list[UUID],
+) -> dict[UUID, dict]:
+    """Load complete evidence statistics for the requested arc candidates."""
+    if not cycle_ids:
+        return {}
+    rows = (
+        await session.execute(
+            select(CycleMembershipORM, EpisodeORM)
+            .join(EpisodeORM, EpisodeORM.id == CycleMembershipORM.episode_id)
+            .where(
+                CycleMembershipORM.cycle_id.in_(cycle_ids),
+                CycleMembershipORM.review_status != "rejected",
+            )
+        )
+    ).all()
+    by_cycle: dict[UUID, list[tuple[CycleMembershipORM, EpisodeORM]]] = {}
+    for membership, episode in rows:
+        by_cycle.setdefault(membership.cycle_id, []).append((membership, episode))
+    return {
+        cycle_id: _arc_quality(by_cycle.get(cycle_id, []))
+        for cycle_id in cycle_ids
+    }
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
@@ -117,17 +289,112 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
         async def count(stmt):
             return (await session.execute(stmt)).scalar() or 0
 
+        active_membership = CycleMembershipORM.review_status != "rejected"
+        arc_evidence = (
+            select(
+                CycleORM.id.label("cycle_id"),
+                func.count(
+                    func.distinct(
+                        case((active_membership, CycleMembershipORM.episode_id), else_=None)
+                    )
+                ).label("episode_count"),
+                func.count(
+                    func.distinct(
+                        case(
+                            (
+                                and_(active_membership, EpisodeORM.arc_phase.is_not(None)),
+                                EpisodeORM.arc_phase,
+                            ),
+                            else_=None,
+                        )
+                    )
+                ).label("phase_count"),
+            )
+            .outerjoin(CycleMembershipORM, CycleMembershipORM.cycle_id == CycleORM.id)
+            .outerjoin(EpisodeORM, EpisodeORM.id == CycleMembershipORM.episode_id)
+            .where(CycleORM.is_arc_instance)
+            .group_by(CycleORM.id)
+            .subquery()
+        )
+        formed_condition = and_(
+            arc_evidence.c.episode_count >= FORMED_ARC_MIN_EPISODES,
+            arc_evidence.c.phase_count >= FORMED_ARC_MIN_PHASES,
+        )
+        arc_counts = (
+            await session.execute(
+                select(
+                    func.count().label("total"),
+                    func.sum(case((formed_condition, 1), else_=0)).label("formed"),
+                    func.sum(case((formed_condition, 0), else_=1)).label("candidates"),
+                ).select_from(arc_evidence)
+            )
+        ).one()
+        episode_counts = (
+            await session.execute(
+                select(
+                    func.count(EpisodeORM.id).label("total"),
+                    func.sum(
+                        case(
+                            (
+                                (EpisodeORM.start_year.is_not(None))
+                                | (EpisodeORM.start_date.is_not(None)),
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ).label("dated"),
+                    func.sum(
+                        case((EpisodeORM.source_published_at.is_not(None), 1), else_=0)
+                    ).label("source_dated"),
+                    func.sum(case((EpisodeORM.scope_id.is_not(None), 1), else_=0)).label(
+                        "scope_resolved"
+                    ),
+                    func.sum(case((EpisodeORM.arc_phase.is_not(None), 1), else_=0)).label(
+                        "phased"
+                    ),
+                    func.sum(
+                        case((EpisodeORM.start_year >= 1990, 1), else_=0)
+                    ).label("recent"),
+                )
+            )
+        ).one()
+        episode_total = int(episode_counts.total or 0)
         return {
             "status": "ok",
             "documents": await count(select(func.count(SourceDocumentORM.id))),
-            "episodes": await count(select(func.count(EpisodeORM.id))),
-            "arc_instances": await count(select(func.count(CycleORM.id)).where(CycleORM.is_arc_instance)),
+            "episodes": episode_total,
+            "arc_instances": int(arc_counts.total or 0),
+            "formed_arcs": int(arc_counts.formed or 0),
+            "arc_candidates": int(arc_counts.candidates or 0),
             "pending_reviews": (
                 await count(
                     select(func.count(CycleMembershipORM.id)).where(CycleMembershipORM.review_status == "pending")
                 )
             )
             + (await count(select(func.count(EpisodeLinkORM.id)).where(EpisodeLinkORM.review_status == "pending"))),
+            "quality": {
+                "dated_episodes": int(episode_counts.dated or 0),
+                "undated_episodes": episode_total - int(episode_counts.dated or 0),
+                "source_dated_episodes": int(episode_counts.source_dated or 0),
+                "source_date_missing": episode_total - int(episode_counts.source_dated or 0),
+                "episodes_since_1990": int(episode_counts.recent or 0),
+                "scope_resolved_episodes": int(episode_counts.scope_resolved or 0),
+                "scope_unresolved_episodes": episode_total
+                - int(episode_counts.scope_resolved or 0),
+                "phased_episodes": int(episode_counts.phased or 0),
+                "unphased_episodes": episode_total - int(episode_counts.phased or 0),
+                "source_backed_episodes": await count(
+                    select(func.count(func.distinct(SourcePassageORM.episode_id)))
+                ),
+                "extraction_audit_records": await count(
+                    select(func.count(ExtractionRecordORM.id))
+                ),
+                "episode_links": await count(select(func.count(EpisodeLinkORM.id))),
+                "formation_threshold": {
+                    "episodes": FORMED_ARC_MIN_EPISODES,
+                    "phases": FORMED_ARC_MIN_PHASES,
+                },
+            },
         }
 
     @app.get("/api/documents")
@@ -152,14 +419,20 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
         ]
 
     @app.get("/api/arc-instances")
-    async def arc_instances(session: SessionDep) -> list:
+    async def arc_instances(
+        session: SessionDep,
+        limit: int = Query(100, ge=1, le=2500),
+    ) -> list:
         from narrative_engine.composition.pipeline import _infer_expected_phases
         from narrative_engine.models import ArcType
 
         cycles = (
             (
                 await session.execute(
-                    select(CycleORM).where(CycleORM.is_arc_instance).order_by(CycleORM.created_at.desc()).limit(100)
+                    select(CycleORM)
+                    .where(CycleORM.is_arc_instance)
+                    .order_by(CycleORM.created_at.desc())
+                    .limit(limit)
                 )
             )
             .scalars()
@@ -170,7 +443,14 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
 
         cycle_ids = [c.id for c in cycles]
         memberships = (
-            (await session.execute(select(CycleMembershipORM).where(CycleMembershipORM.cycle_id.in_(cycle_ids))))
+            (
+                await session.execute(
+                    select(CycleMembershipORM).where(
+                        CycleMembershipORM.cycle_id.in_(cycle_ids),
+                        CycleMembershipORM.review_status != "rejected",
+                    )
+                )
+            )
             .scalars()
             .all()
         )
@@ -198,14 +478,9 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
             members = []
             for m in sorted(
                 by_cycle.get(cycle.id, []),
-                key=lambda m: (
-                    (
-                        episodes[m.episode_id].start_date is None,
-                        episodes[m.episode_id].start_date,
-                    )
-                    if m.episode_id in episodes
-                    else (True, None)
-                ),
+                key=lambda m: _episode_temporal_key(episodes[m.episode_id])
+                if m.episode_id in episodes
+                else (True, 0, "", ""),
             ):
                 episode = episodes.get(m.episode_id)
                 if episode is None:
@@ -217,6 +492,8 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
                         "phase": episode.arc_phase.value if episode.arc_phase else None,
                         "start_date": episode.start_date.isoformat() if episode.start_date else None,
                         "end_date": episode.end_date.isoformat() if episode.end_date else None,
+                        "start_year": _episode_start_year(episode),
+                        "end_year": _episode_end_year(episode),
                         "link_status": m.link_status,
                         "review_status": m.review_status,
                         "membership_id": str(m.id),
@@ -224,6 +501,13 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
                 )
 
             covered = {m["phase"] for m in members if m["phase"]}
+            quality = _arc_quality(
+                [
+                    (membership, episodes[membership.episode_id])
+                    for membership in by_cycle.get(cycle.id, [])
+                    if membership.episode_id in episodes
+                ]
+            )
             payload.append(
                 {
                     "id": str(cycle.id),
@@ -235,9 +519,70 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
                     "expected_phases": expected_phases,
                     "covered_phases": sorted(covered),
                     "episodes": members,
+                    **quality,
                 }
             )
         return payload
+
+    @app.get("/api/episodes")
+    async def episodes(
+        session: SessionDep,
+        limit: int = Query(2500, ge=1, le=5000),
+    ) -> dict:
+        """Return the lightweight chronological corpus used by the main UI.
+
+        Unlike ``/api/arc-space``, this endpoint deliberately excludes
+        embeddings, PCA coordinates, and nearest-neighbour calculations.  It
+        therefore supports complete timelines without making first paint pay
+        the quadratic similarity-matrix cost.
+        """
+        total = (await session.execute(select(func.count(EpisodeORM.id)))).scalar() or 0
+        rows = (
+            (
+                await session.execute(
+                    select(EpisodeORM)
+                    .order_by(EpisodeORM.start_year.asc().nullslast(), EpisodeORM.created_at)
+                    .limit(limit)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if not rows:
+            return {"nodes": [], "total": total, "truncated": False}
+
+        selected_ids = {episode.id for episode in rows}
+        memberships = (
+            await session.execute(
+                select(CycleMembershipORM, CycleORM)
+                .join(CycleORM, CycleMembershipORM.cycle_id == CycleORM.id)
+                .where(
+                    CycleORM.is_arc_instance,
+                    CycleMembershipORM.episode_id.in_(selected_ids),
+                    CycleMembershipORM.review_status != "rejected",
+                )
+            )
+        ).all()
+        memberships_by_episode: dict = {}
+        for membership, cycle in memberships:
+            memberships_by_episode.setdefault(membership.episode_id, []).append((membership, cycle))
+        arc_quality_by_cycle = await _arc_quality_for_cycles(
+            session,
+            {cycle.id for _, cycle in memberships},
+        )
+
+        return {
+            "nodes": [
+                _episode_payload(
+                    episode,
+                    memberships_by_episode.get(episode.id, []),
+                    arc_quality_by_cycle=arc_quality_by_cycle,
+                )
+                for episode in rows
+            ],
+            "total": total,
+            "truncated": total > len(rows),
+        }
 
     @app.get("/api/arc-space")
     async def arc_space(
@@ -260,7 +605,7 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
                         EpisodeORM.structural_embedding.is_not(None),
                         EpisodeORM.structural_embedding_epoch == current_epoch("structural"),
                     )
-                    .order_by(EpisodeORM.start_date, EpisodeORM.created_at)
+                    .order_by(EpisodeORM.start_year.asc().nullslast(), EpisodeORM.created_at)
                     .limit(limit)
                 )
             )
@@ -305,59 +650,22 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
         for membership, cycle in memberships:
             memberships_by_episode.setdefault(membership.episode_id, []).append((membership, cycle))
             memberships_by_cycle.setdefault(cycle.id, []).append((membership, cycle))
+        arc_quality_by_cycle = await _arc_quality_for_cycles(session, set(memberships_by_cycle))
 
-        nodes = []
-        scope_registry = get_registry()
-        for index, episode in enumerate(episodes):
-            episode_memberships = memberships_by_episode.get(episode.id, [])
-            registered_lineage = scope_registry.lineage(episode.scope_id)
-            if registered_lineage:
-                scope_path = [scope.name for scope in reversed(registered_lineage)]
-            else:
-                scope_path = [label for label in (episode.parent_scope_name, episode.scope_name) if label]
-            nodes.append(
-                {
-                    "id": str(episode.id),
-                    "title": episode.title,
-                    "summary": episode.summary,
-                    "x": float(coordinates[index, 0]),
-                    "y": float(coordinates[index, 1]),
-                    "z": float(coordinates[index, 2]),
-                    "arc_type": episode.arc_type.value if episode.arc_type else None,
-                    "phase": episode.arc_phase.value if episode.arc_phase else None,
-                    "confidence": float(episode.phase_confidence or 0.0),
-                    "classification_state": episode.classification_state,
-                    "start_date": episode.start_date.isoformat() if episode.start_date else None,
-                    "end_date": episode.end_date.isoformat() if episode.end_date else None,
-                    "scope_id": episode.scope_id,
-                    "scope_name": episode.scope_name,
-                    "scope_kind": episode.scope_kind,
-                    "parent_scope_name": episode.parent_scope_name,
-                    "scope_confidence": episode.scope_confidence,
-                    "scope_evidence": episode.scope_evidence,
-                    "scope_notes": episode.scope_notes,
-                    "scope_path": scope_path,
-                    "location": episode.location,
-                    "change_pattern": episode.change_pattern,
-                    "pattern_confidence": float(episode.pattern_confidence or 0.0),
-                    "pattern_rationale": episode.pattern_rationale,
-                    "situation_scale": episode.situation_scale,
-                    "domains": list(episode.domains or []),
-                    "configuration": dict(episode.configuration or {}),
-                    "mechanism_families": list(episode.mechanism_families or []),
-                    "mechanisms": list(episode.mechanism_tags or []),
-                    "source_chunks": list(episode.extracted_from or []),
-                    "arc_instances": [
-                        {
-                            "id": str(cycle.id),
-                            "name": cycle.name,
-                            "link_status": membership.link_status,
-                            "review_status": membership.review_status,
-                        }
-                        for membership, cycle in episode_memberships
-                    ],
-                }
+        nodes = [
+            _episode_payload(
+                episode,
+                memberships_by_episode.get(episode.id, []),
+                (
+                    float(coordinates[index, 0]),
+                    float(coordinates[index, 1]),
+                    float(coordinates[index, 2]),
+                ),
+                arc_quality_by_cycle,
             )
+            for index, episode in enumerate(episodes)
+        ]
+        scope_registry = get_registry()
 
         edges = []
         seen_neighbors = set()
@@ -409,23 +717,37 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
                     }
                 )
 
-        # A non-causal trajectory for each focal subject makes the formation,
-        # expansion, contestation, and decline of a party/faction/movement
-        # visible even when it has no legacy ArcType composition yet.
-        episodes_by_scope: dict[str, list[EpisodeORM]] = {}
+        # An episode belongs to the trajectory of its focal subject and any
+        # explicitly supported containing subject. This lets Han, Ming, Qing,
+        # and a movement inside China appear as distinct facets of a larger
+        # Chinese trajectory without flattening their stored focal identities.
+        episodes_by_scope: dict[str, dict[UUID, tuple[EpisodeORM, str, str]]] = {}
         for episode in episodes:
             if episode.scope_confidence is not None and episode.scope_confidence < DEFAULT_SCOPE_CONFIDENCE_FLOOR:
                 continue
-            key = scope_partition_key(episode.scope_id, episode.scope_name)
-            if key and episode.start_date and episode.change_pattern:
-                episodes_by_scope.setdefault(key, []).append(episode)
+            if _episode_start_year(episode) is None or not episode.change_pattern:
+                continue
+            initial_candidates = [
+                (episode.scope_id or episode.scope_name, "focal"),
+                (episode.parent_scope_name, "parent"),
+            ]
+            candidates: list[tuple[str | None, str]] = []
+            for label, relation in initial_candidates:
+                candidates.append((label, relation))
+                candidates.extend((scope.id, "ancestor") for scope in scope_registry.lineage(label)[1:])
+            for label, relation in candidates:
+                key = scope_partition_key(None, label)
+                if key and label:
+                    canonical_scope = scope_registry.get(key)
+                    display_label = canonical_scope.name if canonical_scope else label
+                    episodes_by_scope.setdefault(key, {})[episode.id] = (episode, relation, display_label)
 
-        for scope_episodes in episodes_by_scope.values():
+        for scope_entries in episodes_by_scope.values():
             ordered_scope_episodes = sorted(
-                scope_episodes,
-                key=lambda episode: (episode.start_date, episode.created_at),
+                scope_entries.values(),
+                key=lambda item: _episode_temporal_key(item[0]),
             )
-            for source, target in zip(
+            for (source, source_relation, scope_label), (target, target_relation, _) in zip(
                 ordered_scope_episodes,
                 ordered_scope_episodes[1:],
                 strict=False,
@@ -435,13 +757,18 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
                         "source": str(source.id),
                         "target": str(target.id),
                         "kind": "scope_sequence",
-                        "scope_name": source.scope_name or source.scope_id,
+                        "scope_name": scope_label,
+                        "source_scope_relation": source_relation,
+                        "target_scope_relation": target_relation,
                         "source_pattern": source.change_pattern,
                         "target_pattern": target.change_pattern,
                         "link_status": "attested",
                         "review_status": "auto",
                         "explanation": {
-                            "summary": "Chronological observations of the same focal scope; not a causal claim",
+                            "summary": (
+                                f"Chronological observations within {scope_label}; "
+                                "the focal facets may differ and this is not a causal claim"
+                            ),
                             "projection_is_approximate": True,
                         },
                     }
@@ -450,11 +777,7 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
         for cycle_memberships in memberships_by_cycle.values():
             ordered = sorted(
                 cycle_memberships,
-                key=lambda item: (
-                    by_id[item[0].episode_id].start_date is None,
-                    by_id[item[0].episode_id].start_date,
-                    by_id[item[0].episode_id].created_at,
-                ),
+                key=lambda item: _episode_temporal_key(by_id[item[0].episode_id]),
             )
             for (source_membership, cycle), (target_membership, _) in zip(ordered, ordered[1:], strict=False):
                 source = by_id[source_membership.episode_id]
@@ -466,6 +789,9 @@ def create_app(start_watcher: Optional[bool] = None) -> FastAPI:
                         "kind": "arc_sequence",
                         "arc_id": str(cycle.id),
                         "arc_name": cycle.name,
+                        "formation_status": arc_quality_by_cycle.get(cycle.id, {}).get(
+                            "formation_status", "candidate"
+                        ),
                         "link_status": target_membership.link_status,
                         "review_status": target_membership.review_status,
                         "structural_similarity": float(

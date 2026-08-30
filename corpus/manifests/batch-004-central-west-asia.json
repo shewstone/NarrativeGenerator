@@ -1,0 +1,37 @@
+[
+  {
+    "title": "The Heart of Asia",
+    "coverage": "Central Asia and the Russian Turkestan khanates from antiquity through Russian expansion",
+    "source_page": "https://www.gutenberg.org/ebooks/57750",
+    "url": "https://www.gutenberg.org/cache/epub/57750/pg57750.txt",
+    "filename": "pg57750-heart-of-asia.txt"
+  },
+  {
+    "title": "The Mongols: A History",
+    "coverage": "Mongol groups, imperial formation, successor khanates, and Eurasian expansion",
+    "source_page": "https://www.gutenberg.org/ebooks/72183",
+    "url": "https://www.gutenberg.org/cache/epub/72183/pg72183.txt",
+    "filename": "pg72183-mongols-history.txt"
+  },
+  {
+    "title": "The Byzantine Empire",
+    "coverage": "Eastern Roman and Byzantine history from Constantinople's foundation through 1453",
+    "source_page": "https://www.gutenberg.org/ebooks/37756",
+    "url": "https://www.gutenberg.org/cache/epub/37756/pg37756.txt",
+    "filename": "pg37756-byzantine-empire.txt"
+  },
+  {
+    "title": "The Turkish Empire, Its Growth and Decay",
+    "coverage": "Ottoman formation, expansion, institutional development, reform, and territorial retreat",
+    "source_page": "https://www.gutenberg.org/ebooks/46481",
+    "url": "https://www.gutenberg.org/cache/epub/46481/pg46481.txt",
+    "filename": "pg46481-turkish-empire.txt"
+  },
+  {
+    "title": "Annals of the Early Caliphate",
+    "coverage": "Rashidun formation, early Islamic expansion, succession conflicts, and the Umayyad transition",
+    "source_page": "https://www.gutenberg.org/ebooks/72386",
+    "url": "https://www.gutenberg.org/cache/epub/72386/pg72386.txt",
+    "filename": "pg72386-early-caliphate.txt"
+  }
+]

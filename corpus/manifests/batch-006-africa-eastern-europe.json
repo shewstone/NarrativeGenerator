@@ -1,0 +1,37 @@
+[
+  {
+    "title": "A History of the Colonization of Africa by Alien Races",
+    "coverage": "African migrations, external colonization, West African states, resistance, and colonial systems",
+    "source_page": "https://www.gutenberg.org/ebooks/75882",
+    "url": "https://www.gutenberg.org/cache/epub/75882/pg75882.txt",
+    "filename": "pg75882-colonization-africa.txt"
+  },
+  {
+    "title": "History of the Zulu War and Its Origin",
+    "coverage": "Zulu political formation, regional groups, colonial pressure, resistance, and the war of 1879",
+    "source_page": "https://www.gutenberg.org/ebooks/75320",
+    "url": "https://www.gutenberg.org/cache/epub/75320/pg75320.txt",
+    "filename": "pg75320-zulu-war-origin.txt"
+  },
+  {
+    "title": "The Balkans",
+    "coverage": "Bulgaria, Serbia, Greece, Romania, Montenegro, and Turkey from antiquity through 1914",
+    "source_page": "https://www.gutenberg.org/ebooks/11716",
+    "url": "https://www.gutenberg.org/cache/epub/11716/pg11716.txt",
+    "filename": "pg11716-balkans-history.txt"
+  },
+  {
+    "title": "Bohemia",
+    "coverage": "Czech and Bohemian history, identity, religious movements, and independence through 1620",
+    "source_page": "https://www.gutenberg.org/ebooks/49955",
+    "url": "https://www.gutenberg.org/cache/epub/49955/pg49955.txt",
+    "filename": "pg49955-bohemia-history.txt"
+  },
+  {
+    "title": "The Story of Hungary",
+    "coverage": "Magyar migration, Hungarian state formation, dynastic change, Ottoman pressure, and reform",
+    "source_page": "https://www.gutenberg.org/ebooks/50038",
+    "url": "https://www.gutenberg.org/cache/epub/50038/pg50038.txt",
+    "filename": "pg50038-story-hungary.txt"
+  }
+]

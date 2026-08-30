@@ -9,9 +9,11 @@ reflects what the real pipeline does.
 
 import asyncio
 import sys
+
 sys.path.insert(0, 'tests/fixtures')
 
-from composition_fixture import CompositionFixture, validate_composition_pipeline
+from composition_fixture import validate_composition_pipeline
+
 from narrative_engine.composition import compose_arc_instances_from_episodes
 
 

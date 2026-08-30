@@ -1,0 +1,52 @@
+[
+  {
+    "title": "China: A Country Study",
+    "coverage": "Late Qing collapse, republican and communist movements, the PRC, Cultural Revolution, and reform through 1987",
+    "source_page": "https://www.loc.gov/item/87600493/",
+    "published_at": "1988-12-31",
+    "include_chunk_ranges": [[0, 7], [53, 71]],
+    "chunks_preselected": true,
+    "url": "https://tile.loc.gov/storage-services/master/frd/frdcstdy/ch/chinacountrystud00word/chinacountrystud00word_djvu.txt",
+    "filename": "loc-china-country-study-1987.txt"
+  },
+  {
+    "title": "Russia: A Country Study",
+    "coverage": "Imperial and Soviet development, Soviet dissolution, and Russian political and social change through 1996",
+    "source_page": "https://www.loc.gov/item/97007563/",
+    "published_at": "1998-12-31",
+    "include_chunk_ranges": [[0, 15], [50, 63]],
+    "chunks_preselected": true,
+    "url": "https://tile.loc.gov/storage-services/master/frd/frdcstdy/ru/russiacountrystu00curt/russiacountrystu00curt_djvu.txt",
+    "filename": "loc-russia-country-study-1996.txt"
+  },
+  {
+    "title": "India: A Country Study",
+    "coverage": "Colonial rule, independence, party competition, social transformation, and economic reform through 1996",
+    "source_page": "https://www.loc.gov/item/96019266/",
+    "published_at": "1996-12-31",
+    "include_chunk_ranges": [[0, 6], [52, 68]],
+    "chunks_preselected": true,
+    "url": "https://tile.loc.gov/storage-services/master/frd/frdcstdy/in/indiacountrystud00heit/indiacountrystud00heit_djvu.txt",
+    "filename": "loc-india-country-study-1995.txt"
+  },
+  {
+    "title": "Japan: A Country Study",
+    "coverage": "Meiji modernization, empire and defeat, postwar reconstruction, party politics, and economic change through 1990",
+    "source_page": "https://www.loc.gov/item/91029874/",
+    "published_at": "1992-12-31",
+    "include_chunk_ranges": [[0, 8], [41, 56]],
+    "chunks_preselected": true,
+    "url": "https://tile.loc.gov/storage-services/master/frd/frdcstdy/ja/japancountrystud00dola/japancountrystud00dola_djvu.txt",
+    "filename": "loc-japan-country-study-1990.txt"
+  },
+  {
+    "title": "South Africa: A Country Study",
+    "coverage": "Colonial formation, apartheid, liberation movements, democratic transition, and party realignment through 1997",
+    "source_page": "https://www.loc.gov/item/96048983/",
+    "published_at": "1997-12-31",
+    "include_chunk_ranges": [[0, 11], [31, 40]],
+    "chunks_preselected": true,
+    "url": "https://tile.loc.gov/storage-services/master/frd/frdcstdy/so/southafricacount00byrn/southafricacount00byrn_djvu.txt",
+    "filename": "loc-south-africa-country-study-1996.txt"
+  }
+]

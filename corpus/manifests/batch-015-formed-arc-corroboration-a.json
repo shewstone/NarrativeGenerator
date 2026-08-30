@@ -1,0 +1,50 @@
+[
+  {
+    "title": "Letters of John Huss, Written During His Exile and Imprisonment",
+    "coverage": "Primary correspondence and editorial context covering Hus's reform campaign, exile, journey to Constance, imprisonment, trial, refusal to recant, and execution",
+    "source_page": "https://www.gutenberg.org/ebooks/77359",
+    "published_at": "1846-01-01",
+    "include_chunk_ranges": [[0, 19]],
+    "chunks_preselected": true,
+    "url": "https://www.gutenberg.org/cache/epub/77359/pg77359.txt",
+    "filename": "pg77359-letters-john-hus.txt"
+  },
+  {
+    "title": "History of the Zulu War",
+    "coverage": "Independent contemporary account of Zulu state formation, social institutions, the 1879 war, Cetshwayo's defeat and capture, and the postwar settlement; retained as a clearly colonial viewpoint requiring later counter-evidence",
+    "source_page": "https://www.gutenberg.org/ebooks/46166",
+    "published_at": "1880-01-01",
+    "include_chunk_ranges": [[0, 20]],
+    "chunks_preselected": true,
+    "url": "https://www.gutenberg.org/cache/epub/46166/pg46166.txt",
+    "filename": "pg46166-history-zulu-war.txt"
+  },
+  {
+    "title": "The Balkan Wars: 1912-1913",
+    "coverage": "Diplomatic and military account of the Balkan alliances, Bulgaria's campaign against the Ottoman Empire, inter-allied disputes, the Second Balkan War, territorial losses, and the postwar settlement",
+    "source_page": "https://www.gutenberg.org/ebooks/11676",
+    "published_at": "1916-01-01",
+    "url": "https://www.gutenberg.org/cache/epub/11676/pg11676.txt",
+    "filename": "pg11676-balkan-wars-1912-1913.txt"
+  },
+  {
+    "title": "History of the Saracens",
+    "coverage": "Independent historical account restricted to the crisis surrounding Uthman's death, Ali's accession, the First Fitna, arbitration, Ali's assassination, and the transition to Hasan and Muawiya",
+    "source_page": "https://archive.org/details/historyofsaracen00ocklrich",
+    "published_at": "1857-01-01",
+    "include_chunk_ranges": [[51, 62]],
+    "chunks_preselected": true,
+    "url": "https://archive.org/download/historyofsaracen00ocklrich/historyofsaracen00ocklrich_djvu.txt",
+    "filename": "ia-history-saracens-ockley-1857.txt"
+  },
+  {
+    "title": "Through Russian Central Asia",
+    "coverage": "Independent account restricted to Central Asian tribal history and the Russian conquest, including the Tekke, Geok Tepe, annexation, and immediate colonial aftermath",
+    "source_page": "https://www.gutenberg.org/ebooks/67938",
+    "published_at": "1916-01-01",
+    "include_chunk_ranges": [[4, 4], [6, 6]],
+    "chunks_preselected": true,
+    "url": "https://www.gutenberg.org/cache/epub/67938/pg67938.txt",
+    "filename": "pg67938-russian-central-asia.txt"
+  }
+]

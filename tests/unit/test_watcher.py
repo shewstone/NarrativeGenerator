@@ -1,6 +1,8 @@
 """Drop-directory watcher tests (T7, docs/tickets/T7-drop-directory-watcher.md)."""
 
+import asyncio
 import hashlib
+import json
 import os
 import time
 from datetime import datetime, timezone
@@ -20,7 +22,11 @@ from narrative_engine.storage.repositories import (
 from narrative_engine.watcher import (
     DocumentProcessor,
     WatcherConfig,
+    _constrain_episode_to_source_date,
     _hash_file,
+    _source_chunk_ranges,
+    _source_chunks_preselected,
+    _source_publication_date,
     llm_configured,
     scan_once,
 )
@@ -49,6 +55,106 @@ def test_hash_file_streams_without_path_read_bytes(tmp_path, monkeypatch):
 
     assert digest == hashlib.sha256(content).hexdigest()
     assert size_bytes == len(content)
+
+
+@pytest.mark.parametrize(
+    ("filename", "expected"),
+    [
+        ("loc-china-country-study-1987.txt", datetime(1987, 12, 31, tzinfo=UTC)),
+        ("crs-china-relations-2026-08-26.pdf", datetime(2026, 8, 26, tzinfo=UTC)),
+        ("pg15359-the-negro.txt", None),
+        ("bad-date-2026-02-30.pdf", None),
+    ],
+)
+def test_source_publication_date_from_filename(filename, expected):
+    assert _source_publication_date(filename) == expected
+
+
+def test_source_publication_registry_overrides_filename_year(tmp_path):
+    provenance = tmp_path / ".source-provenance.json"
+    provenance.write_text(
+        json.dumps(
+            {
+                "loc-china-country-study-1987.txt": {
+                    "published_at": "1988-12-31T00:00:00+00:00"
+                }
+            }
+        )
+    )
+
+    assert _source_publication_date(
+        "loc-china-country-study-1987.txt", provenance
+    ) == datetime(1988, 12, 31, tzinfo=UTC)
+
+
+def test_explicit_unknown_publication_date_suppresses_filename_inference(tmp_path):
+    provenance = tmp_path / ".source-provenance.json"
+    provenance.write_text(
+        json.dumps(
+            {
+                "china-revolution-1911.txt": {
+                    "published_at": None,
+                }
+            }
+        )
+    )
+
+    assert _source_publication_date("china-revolution-1911.txt", provenance) is None
+
+
+def test_source_chunk_ranges_from_registry(tmp_path):
+    provenance = tmp_path / ".source-provenance.json"
+    provenance.write_text(
+        json.dumps(
+            {
+                "book.txt": {
+                    "include_chunk_ranges": [[0, 2], [7, 9]],
+                    "chunks_preselected": True,
+                }
+            }
+        )
+    )
+
+    assert _source_chunk_ranges("book.txt", provenance) == ((0, 2), (7, 9))
+    assert _source_chunks_preselected("book.txt", provenance) is True
+
+
+def test_source_date_caps_an_ongoing_episode():
+    episode = Episode(
+        title="Ongoing reform",
+        summary="A reform underway when the source was published.",
+        start_year=1980,
+        end_year=1989,
+        start_date=datetime(1980, 1, 1, tzinfo=UTC),
+        end_date=datetime(1989, 1, 1, tzinfo=UTC),
+    )
+
+    retained = _constrain_episode_to_source_date(
+        episode,
+        datetime(1988, 12, 31, tzinfo=UTC),
+    )
+
+    assert retained is True
+    assert episode.end_year == 1988
+    assert episode.end_date == datetime(1988, 12, 31, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    "episode",
+    [
+        Episode(title="Forecast", summary="Future plan", start_year=1990),
+        Episode(
+            title="Dated forecast",
+            summary="Future plan",
+            start_date=datetime(1989, 1, 1, tzinfo=UTC),
+        ),
+    ],
+)
+def test_source_date_rejects_episodes_that_begin_in_the_future(episode):
+    assert not _constrain_episode_to_source_date(
+        episode,
+        datetime(1988, 12, 31, tzinfo=UTC),
+    )
 
 
 class TestSourceDocumentRoundTrip:
@@ -127,6 +233,15 @@ def _write(tmp_path: Path, name: str, content: bytes, old: bool = True) -> Path:
 
 def _config(tmp_path: Path) -> WatcherConfig:
     return WatcherConfig(watch_dir=tmp_path, settle_seconds=2.0)
+
+
+def test_watcher_config_uses_bounded_document_lease(monkeypatch, tmp_path):
+    monkeypatch.setenv("NE_WATCH_DIR", str(tmp_path))
+    monkeypatch.setenv("NE_DOCUMENT_LEASE_SECONDS", "90")
+
+    config = WatcherConfig.from_env()
+
+    assert config.lease_seconds == 90
 
 
 class TestDuplicateGuard:
@@ -223,13 +338,14 @@ class FakeExtractor:
         self._fail_on_call = fail_on_call
         self.calls = 0
 
-    async def process_text(self, text, source_chunk_id, session):
+    async def process_text(self, text, source_chunk_id, session, skip_segmentation=False):
         from types import SimpleNamespace
 
         from narrative_engine.models import Episode
         from narrative_engine.storage.repositories import EpisodeRepository
 
         self.calls += 1
+        assert isinstance(skip_segmentation, bool)
         if self._fail_on_call is not None and self.calls == self._fail_on_call:
             raise RuntimeError("LLM exploded mid-book")
         episode = Episode(title=f"ep-{source_chunk_id}", summary="s")
@@ -244,6 +360,64 @@ def _multi_chunk_file(tmp_path: Path, name: str = "book.txt") -> Path:
 
 class TestChunkProgress:
     @pytest.mark.asyncio
+    async def test_configured_chunk_ranges_skip_irrelevant_sections(
+        self, db_session, tmp_path
+    ):
+        path = _multi_chunk_file(tmp_path, "selected-book.txt")
+        (tmp_path / ".source-provenance.json").write_text(
+            json.dumps(
+                {
+                    path.name: {
+                        "include_chunk_ranges": [[1, 1]],
+                        "chunks_preselected": True,
+                    }
+                }
+            )
+        )
+        extractor = FakeExtractor(db_session)
+        document = await DocumentProcessor(
+            extractor=extractor,
+            embedder=FakeEmbedder(),
+        ).process_file(db_session, path)
+
+        assert document is not None
+        assert document.status == SourceDocumentStatus.COMPLETED
+        assert document.chunks_created > 1
+        assert document.chunks_processed == document.chunks_created
+        assert document.episodes_created == 1
+        assert extractor.calls == 1
+
+    @pytest.mark.asyncio
+    async def test_cancellation_requeues_document_for_immediate_resume(self, db_session, tmp_path):
+        started = asyncio.Event()
+        never_finishes = asyncio.Event()
+
+        class BlockingExtractor(FakeExtractor):
+            async def process_text(self, text, source_chunk_id, session):
+                started.set()
+                await never_finishes.wait()
+
+        path = _write(tmp_path, "book.txt", b"one historical episode")
+        processor = DocumentProcessor(
+            extractor=BlockingExtractor(db_session),
+            embedder=FakeEmbedder(),
+        )
+        task = asyncio.create_task(processor.process_file(db_session, path))
+        await started.wait()
+
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        content_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+        document = await SourceDocumentRepository(db_session).get_by_hash_and_filename(content_hash, path.name)
+        assert document is not None
+        assert document.status == SourceDocumentStatus.QUEUED
+        row = await db_session.get(SourceDocumentORM, document.id)
+        assert row.claim_token is None
+        assert row.lease_expires_at is None
+
+    @pytest.mark.asyncio
     async def test_progress_counts_track_chunks(self, db_session, tmp_path):
         extractor = FakeExtractor(db_session)
         processor = DocumentProcessor(extractor=extractor, embedder=FakeEmbedder())
@@ -257,6 +431,23 @@ class TestChunkProgress:
         assert doc.chunks_processed == doc.chunks_created == extractor.calls
         assert doc.episodes_created == extractor.calls
         assert doc.extraction_ran is True
+
+    @pytest.mark.asyncio
+    async def test_source_removed_during_scan_is_ignored(self, db_session, tmp_path):
+        path = _write(tmp_path, "cleaned.txt", b"already processed")
+
+        class RemovedSourceProcessor:
+            async def process_file(self, session, candidate):
+                assert candidate == path
+                raise FileNotFoundError(candidate)
+
+        touched = await scan_once(
+            db_session,
+            _config(tmp_path),
+            RemovedSourceProcessor(),
+        )
+
+        assert touched == []
 
     @pytest.mark.asyncio
     async def test_partial_progress_survives_midfile_failure(self, db_session, tmp_path):

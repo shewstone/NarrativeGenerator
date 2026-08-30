@@ -22,6 +22,7 @@ class LLMConfig:
     max_tokens: int = 4000
     api_key: Optional[str] = None
     base_url: Optional[str] = None
+    request_timeout_seconds: float = 90.0
     # Venice reasoning models otherwise spend tokens narrating simple JSON
     # decisions and may leave message.content empty. Omit this for providers
     # or models that do not support the OpenAI-compatible extension.
@@ -51,6 +52,9 @@ class LLMConfig:
             max_tokens=int(os.getenv(f"{prefix}LLM_MAX_TOKENS", "4000")),
             api_key=os.getenv(f"{prefix}LLM_API_KEY") or (os.getenv(provider_api_key) if provider_api_key else None),
             base_url=os.getenv(f"{prefix}LLM_BASE_URL") or os.getenv("OPENAI_BASE_URL"),
+            request_timeout_seconds=float(
+                os.getenv(f"{prefix}LLM_REQUEST_TIMEOUT_SECONDS", "90")
+            ),
             reasoning_effort=os.getenv(f"{prefix}LLM_REASONING_EFFORT") or None,
         )
 
@@ -64,11 +68,18 @@ class ExtractionPipelineConfig:
     enable_extraction: bool = True
     enable_classification: bool = True
     enable_linking: bool = True
+    # Legacy all-pairs linking inside every chunk duplicates the bounded
+    # document-level linker and can dominate ingestion cost for an eight-event
+    # segment. Keep it available for focused callers, but disable it in the
+    # local batch configuration.
+    enable_chunk_linking: bool = True
 
     # Model routing by stage (design doc Sec 7: "cheap model for
     # segmentation, strong model for extraction/classification/synthesis")
     segmentation_model: str = "claude-haiku-4-5"  # Cheap, fast
+    scope_model: str = "claude-haiku-4-5"  # Constrained registry selection
     extraction_model: str = "claude-sonnet-5"  # Structured episode records
+    reconciliation_model: str = "claude-sonnet-5"  # Document-level phase judgment
     classification_model: str = "claude-sonnet-5"  # Arc/phase judgment
     linking_model: str = "claude-sonnet-5"  # Causal-evidence extraction
 
@@ -105,6 +116,12 @@ class ExtractionPipelineConfig:
     linking_neighbor_window: int = 1
     linking_max_year_gap: float = 25.0
     linking_min_lexical_overlap: float = 0.2
+    cross_link_max_pairs: int = 20
+
+    # Independent episode calls within one chunk are I/O-bound. A small
+    # bounded fan-out removes serial network latency without producing a
+    # burst large enough to overwhelm Venice or the shared DB session.
+    stage_concurrency: int = 3
 
     # Rate limiting
     max_requests_per_minute: int = 60
@@ -132,8 +149,12 @@ class ExtractionPipelineConfig:
             enable_extraction=os.getenv(f"{prefix}ENABLE_EXTRACTION", "true").lower() == "true",
             enable_classification=os.getenv(f"{prefix}ENABLE_CLASSIFICATION", "true").lower() == "true",
             enable_linking=os.getenv(f"{prefix}ENABLE_LINKING", "true").lower() == "true",
+            enable_chunk_linking=os.getenv(f"{prefix}ENABLE_CHUNK_LINKING", "true").lower()
+            == "true",
             segmentation_model=os.getenv(f"{prefix}SEG_MODEL", defaults["segmentation"]),
+            scope_model=os.getenv(f"{prefix}SCOPE_MODEL", defaults["segmentation"]),
             extraction_model=os.getenv(f"{prefix}EXTRACT_MODEL", defaults["strong"]),
+            reconciliation_model=os.getenv(f"{prefix}RECONCILE_MODEL", defaults["strong"]),
             classification_model=os.getenv(f"{prefix}CLASSIFY_MODEL", defaults["strong"]),
             linking_model=os.getenv(f"{prefix}LINK_MODEL", defaults["strong"]),
             chunk_size_tokens=int(os.getenv(f"{prefix}CHUNK_SIZE", "6000")),
@@ -144,6 +165,8 @@ class ExtractionPipelineConfig:
             linking_neighbor_window=int(os.getenv(f"{prefix}LINK_NEIGHBOR_WINDOW", "1")),
             linking_max_year_gap=float(os.getenv(f"{prefix}LINK_MAX_YEAR_GAP", "25")),
             linking_min_lexical_overlap=float(os.getenv(f"{prefix}LINK_MIN_LEXICAL_OVERLAP", "0.2")),
+            cross_link_max_pairs=int(os.getenv(f"{prefix}CROSS_LINK_MAX_PAIRS", "20")),
+            stage_concurrency=int(os.getenv(f"{prefix}STAGE_CONCURRENCY", "3")),
         )
         if config.linking_neighbor_window < 0:
             raise ValueError("LINK_NEIGHBOR_WINDOW must be non-negative")
@@ -151,6 +174,10 @@ class ExtractionPipelineConfig:
             raise ValueError("LINK_MAX_YEAR_GAP must be non-negative")
         if not 0.0 <= config.linking_min_lexical_overlap <= 1.0:
             raise ValueError("LINK_MIN_LEXICAL_OVERLAP must be between 0 and 1")
+        if config.cross_link_max_pairs < 0:
+            raise ValueError("CROSS_LINK_MAX_PAIRS must be non-negative")
+        if not 1 <= config.stage_concurrency <= 8:
+            raise ValueError("STAGE_CONCURRENCY must be between 1 and 8")
         for name, value in (
             ("TAU_CLASS", config.classification_confidence_floor),
             ("TAU_ROLE", config.role_fit_floor),
@@ -161,7 +188,9 @@ class ExtractionPipelineConfig:
         incompatible_prefix = "claude-" if provider == "openai" else "gpt-"
         for model in (
             config.segmentation_model,
+            config.scope_model,
             config.extraction_model,
+            config.reconciliation_model,
             config.classification_model,
             config.linking_model,
         ):
@@ -174,9 +203,11 @@ class ExtractionPipelineConfig:
 class PromptVersions:
     """Versioned prompt templates."""
 
-    segmentation_version: str = "v1.1.0"
-    extraction_version: str = "v2.0.0"
+    segmentation_version: str = "v1.3.0"
+    scope_version: str = "v1.0.0"
+    extraction_version: str = "v2.1.0"
     classification_version: str = "v2.0.0"
+    reconciliation_version: str = "v1.0.0"
     linking_version: str = "v1.0.0"
 
 

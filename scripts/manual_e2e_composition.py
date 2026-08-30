@@ -7,9 +7,8 @@ from datetime import datetime, timedelta
 
 os.environ["DATABASE_URL"] = "postgresql+asyncpg://postgres:postgres@localhost:5432/narrative_engine"
 
-from narrative_engine.composition import CompositionPipeline, ArcInstance, CompositionStatus
+from narrative_engine.composition import ArcInstance, CompositionPipeline, CompositionStatus
 from narrative_engine.models import (
-    Actor,
     ArcPhase,
     ArcType,
     Episode,
@@ -20,7 +19,7 @@ from narrative_engine.storage.repositories import RepositoryFactory
 
 async def test_arc_instance_composition():
     """Test stitching episodes from different sources into unified Arc Instances.
-    
+
     This is the core innovation: Book 1 covers phases 1-2, Book 2 covers phases 3-5,
     and the composition pipeline creates one unified Arc Instance.
     """
@@ -115,9 +114,9 @@ async def test_arc_instance_composition():
         await factory.episodes.create(episode_b2)
         await factory.episodes.create(episode_b3)
 
-        print(f"   ✓ Book A: 2 episodes (BOOM, EUPHORIA)")
-        print(f"   ✓ Book B: 3 episodes (DISTRESS, PANIC, REVULSION)")
-        print(f"   ✓ Total: 5 episodes saved to database")
+        print("   ✓ Book A: 2 episodes (BOOM, EUPHORIA)")
+        print("   ✓ Book B: 3 episodes (DISTRESS, PANIC, REVULSION)")
+        print("   ✓ Total: 5 episodes saved to database")
         print()
 
         print("2. Running composition pipeline...")
@@ -186,11 +185,11 @@ async def test_arc_instance_composition():
         # Verify status - with single-source coverage, status is FRAGMENTED or GAPS
         # This is expected; real-world would have multiple sources per phase
         assert instance.status in [
-            CompositionStatus.COMPLETE, 
-            CompositionStatus.GAPS, 
+            CompositionStatus.COMPLETE,
+            CompositionStatus.GAPS,
             CompositionStatus.FRAGMENTED
         ], f"Expected valid status, got {instance.status}"
-        
+
         # All 5 phases should be present (even if under-covered)
         assert len(instance.phases) == 5, \
             f"Expected 5 phases, got {len(instance.phases)}"
@@ -198,19 +197,19 @@ async def test_arc_instance_composition():
         # Verify phases from both sources
         book_a_phases = instance.get_phase_sources(ArcPhase.BOOM)
         book_b_phases = instance.get_phase_sources(ArcPhase.PANIC)
-        
+
         assert "book-a.txt" in book_a_phases, "BOOM phase should be from Book A"
         assert "book-b.txt" in book_b_phases, "PANIC phase should be from Book B"
 
         print("4. Testing gap filling (simulated)...")
         print()
-        
+
         # Create a partial instance to test gap identification
         partial_instance = ArcInstance(
             arc_type=ArcType.CREDIT_BOOM_AND_BUST,
             canonical_name="Partial Test Instance",
         )
-        
+
         # Only add some phases
         partial_instance.add_episode_to_phase(
             phase=ArcPhase.BOOM,
@@ -224,10 +223,10 @@ async def test_arc_instance_composition():
             source_id="partial-source.txt",
             confidence=0.9,
         )
-        
+
         gaps = partial_instance.identify_gaps(expected_phases)
         partial_instance.update_status()
-        
+
         print(f"   Partial instance gaps: {len(gaps)}")
         for gap in gaps:
             print(f"     • {gap}")

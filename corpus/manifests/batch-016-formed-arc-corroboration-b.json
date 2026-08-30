@@ -1,0 +1,52 @@
+[
+  {
+    "title": "China 2030: Building a Modern, Harmonious, and Creative Society",
+    "coverage": "Independent joint World Bank and Chinese Development Research Center retrospective on the CCP's reform path from 1978, decentralised experimentation, market transition, growth, institutional constraints, and reform tradeoffs",
+    "source_page": "https://openknowledge.worldbank.org/handle/10986/12925",
+    "published_at": "2013-01-01",
+    "include_chunk_ranges": [[2, 8]],
+    "chunks_preselected": true,
+    "url": "https://documents1.worldbank.org/curated/en/781101468239669951/pdf/China-2030-building-a-modern-harmonious-and-creative-society.pdf",
+    "filename": "worldbank-china-2030-2013.pdf"
+  },
+  {
+    "title": "John Hus: A Brief Story of the Life of a Martyr",
+    "coverage": "Independent biographical account of Hus's early influences, institutional opposition, exile, Council of Constance trial, condemnation, execution, and immediate reform legacy",
+    "source_page": "https://www.gutenberg.org/ebooks/26129",
+    "published_at": "1915-01-01",
+    "include_chunk_ranges": [[0, 19]],
+    "chunks_preselected": true,
+    "url": "https://www.gutenberg.org/cache/epub/26129/pg26129.txt",
+    "filename": "pg26129-john-hus-biography.txt"
+  },
+  {
+    "title": "Cetywayo and His White Neighbours",
+    "coverage": "Contemporary account challenging parts of British policy toward Cetshwayo and Zululand, including Zulu state formation, the 1879 invasion, the postwar partition, civil conflict, and the restoration debate",
+    "source_page": "https://www.gutenberg.org/ebooks/8667",
+    "published_at": "1882-01-01",
+    "include_chunk_ranges": [[0, 9]],
+    "chunks_preselected": true,
+    "url": "https://www.gutenberg.org/cache/epub/8667/pg8667.txt",
+    "filename": "pg8667-cetshwayo-white-neighbours.txt"
+  },
+  {
+    "title": "Islam",
+    "coverage": "Muslim-authored interpretation of the early caliphate restricted to the succession after Muhammad, Uthman's death, Ali's accession, the rebellions against him, his assassination, Hasan's renunciation, and Umayyad consolidation",
+    "source_page": "https://www.gutenberg.org/ebooks/70136",
+    "published_at": "1909-01-01",
+    "include_chunk_ranges": [[4, 4]],
+    "chunks_preselected": true,
+    "url": "https://www.gutenberg.org/cache/epub/70136/pg70136.txt",
+    "filename": "pg70136-islam-ameer-ali.txt"
+  },
+  {
+    "title": "Historical Tales, Volume VIII: Russian",
+    "coverage": "Independent popular account restricted to the Trans-Caspian railway and the Russian assault on the Tekke stronghold at Geok Tepe, including the massacre, submission, and colonial consolidation",
+    "source_page": "https://www.gutenberg.org/ebooks/25625",
+    "published_at": "1908-01-01",
+    "include_chunk_ranges": [[28, 28]],
+    "chunks_preselected": true,
+    "url": "https://www.gutenberg.org/cache/epub/25625/pg25625.txt",
+    "filename": "pg25625-russian-tales-geok-tepe.txt"
+  }
+]

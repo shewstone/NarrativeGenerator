@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from narrative_engine.models import ArcPhase, ArcType, utcnow
+from narrative_engine.models import ArcPhase, ArcType, CycleScale, utcnow
 
 
 class CompositionStatus(str, Enum):
@@ -67,6 +67,7 @@ class ArcInstance(BaseModel):
     # the composing cluster shares one, since composition partitions by
     # scope_id before clustering -- see compose_arc_instances_from_episodes).
     scope_id: Optional[str] = None
+    scale: CycleScale = CycleScale.EPISODIC
 
     # Temporal bounds
     start_date: Optional[datetime] = None

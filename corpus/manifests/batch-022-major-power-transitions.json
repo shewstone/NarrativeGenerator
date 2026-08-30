@@ -1,0 +1,42 @@
+[
+  {
+    "url": "https://www.gutenberg.org/ebooks/63233.txt.utf-8",
+    "filename": "pg63233-china-revolution-1911.txt",
+    "title": "China's Revolution, 1911-1912: A Historical and Political Record of the Civil War",
+    "source_page": "https://www.gutenberg.org/ebooks/63233",
+    "include_chunk_ranges": [[0, 0], [4, 9], [17, 23], [26, 28], [31, 35]],
+    "chunks_preselected": true
+  },
+  {
+    "url": "https://www.gutenberg.org/ebooks/70847.txt.utf-8",
+    "filename": "pg70847-new-spirit-india.txt",
+    "title": "The New Spirit in India",
+    "source_page": "https://www.gutenberg.org/ebooks/70847",
+    "include_chunk_ranges": [[0, 0], [2, 4], [10, 18], [23, 23]],
+    "chunks_preselected": true
+  },
+  {
+    "url": "https://www.gutenberg.org/ebooks/66371.txt.utf-8",
+    "filename": "pg66371-inside-russian-revolution.txt",
+    "title": "Inside the Russian Revolution",
+    "source_page": "https://www.gutenberg.org/ebooks/66371",
+    "include_chunk_ranges": [[0, 4], [13, 17], [20, 24]],
+    "chunks_preselected": true
+  },
+  {
+    "url": "https://www.gutenberg.org/ebooks/27604.txt.utf-8",
+    "filename": "pg27604-japan-tokugawa-meiji.txt",
+    "title": "A History of the Japanese People: Late Tokugawa and Meiji Selections",
+    "source_page": "https://www.gutenberg.org/ebooks/27604",
+    "include_chunk_ranges": [[122, 122], [125, 141]],
+    "chunks_preselected": true
+  },
+  {
+    "url": "https://www.gutenberg.org/ebooks/9868.txt.utf-8",
+    "filename": "pg9868-us-since-civil-war.txt",
+    "title": "The United States Since the Civil War: Selected Transitions",
+    "source_page": "https://www.gutenberg.org/ebooks/9868",
+    "include_chunk_ranges": [[0, 5], [35, 41], [45, 51], [59, 66]],
+    "chunks_preselected": true
+  }
+]

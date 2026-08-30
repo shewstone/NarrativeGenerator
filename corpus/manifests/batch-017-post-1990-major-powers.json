@@ -1,0 +1,52 @@
+[
+  {
+    "title": "Political Polarization in the American Public",
+    "coverage": "Longitudinal evidence on U.S. ideological sorting and partisan antipathy from 1994 to 2014, including asymmetric change, political participation, media environments, community sorting, and declining appetite for compromise",
+    "source_page": "https://www.pewresearch.org/politics/2014/06/12/political-polarization-in-the-american-public/",
+    "published_at": "2014-06-12",
+    "include_chunk_ranges": [[0, 7]],
+    "chunks_preselected": true,
+    "url": "https://www.pewresearch.org/wp-content/uploads/sites/4/2014/06/6-12-2014-Political-Polarization-Release.pdf",
+    "filename": "pew-us-polarization-1994-2014.pdf"
+  },
+  {
+    "title": "Brexit at 10: How Has Leaving the EU Changed UK Government?",
+    "coverage": "Retrospective on the 2016-2026 Brexit transition across the economy, state capacity, regulation, law, Parliament, devolution, foreign policy, major political parties, and electoral fragmentation",
+    "source_page": "https://www.instituteforgovernment.org.uk/publication/brexit-at-10",
+    "published_at": "2026-06-23",
+    "include_chunk_ranges": [[0, 5]],
+    "chunks_preselected": true,
+    "url": "https://www.instituteforgovernment.org.uk/sites/default/files/2026-06/Brexit-at-10-EU-UK-government.pdf",
+    "filename": "ifg-uk-brexit-at-10-2026.pdf"
+  },
+  {
+    "title": "Germany Early Elections to the Federal Parliament, 23 February 2025: Final Report",
+    "coverage": "Independent assessment of Germany's 2025 early election, coalition collapse, party competition, the AfD's growth, polarization, campaign issues, information integrity, election administration, results, and representation",
+    "source_page": "https://odihr.osce.org/odihr/elections/germany/593720",
+    "published_at": "2025-06-20",
+    "include_chunk_ranges": [[0, 8]],
+    "chunks_preselected": true,
+    "url": "https://odihr.osce.org/sites/default/files/f/documents/d/b/593720_0.pdf",
+    "filename": "osce-germany-election-2025.pdf"
+  },
+  {
+    "title": "China Primer: China's Political System",
+    "coverage": "Current structure of the CCP party-state under Xi Jinping, including leadership centralization, party hierarchy, government institutions, military control, discipline apparatus, and channels for political participation",
+    "source_page": "https://www.congress.gov/crs-product/IF12505",
+    "published_at": "2024-07-01",
+    "include_chunk_ranges": [[0, 0]],
+    "chunks_preselected": true,
+    "url": "https://www.congress.gov/crs_external_products/IF/PDF/IF12505/IF12505.7.pdf",
+    "filename": "crs-china-political-system-2024.pdf"
+  },
+  {
+    "title": "India's Domestic Political Setting",
+    "coverage": "Post-1990 evolution of India's national party system through 2023, including Congress decline, BJP consolidation under Narendra Modi, Hindu nationalism, federal and regional parties, opposition coordination, institutional disputes, and civil-liberties concerns",
+    "source_page": "https://www.congress.gov/crs-product/IF10298",
+    "published_at": "2023-12-08",
+    "include_chunk_ranges": [[0, 0]],
+    "chunks_preselected": true,
+    "url": "https://www.congress.gov/crs_external_products/IF/PDF/IF10298/IF10298.24.pdf",
+    "filename": "crs-india-domestic-politics-2023.pdf"
+  }
+]

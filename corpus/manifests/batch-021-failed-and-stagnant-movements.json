@@ -1,0 +1,52 @@
+[
+  {
+    "title": "Ti-Ping Tien-Kwoh: The History of the Ti-Ping Revolution, Volume I",
+    "coverage": "A contemporary sympathetic account of the Taiping movement's founder, religious and political formation, recruitment, organization, early conflict, proclamations, and rapid territorial rise",
+    "source_page": "https://www.gutenberg.org/ebooks/39180",
+    "published_at": "1866-01-01",
+    "include_chunk_ranges": [[4, 12]],
+    "chunks_preselected": true,
+    "url": "https://www.gutenberg.org/cache/epub/39180/pg39180.txt",
+    "filename": "pg39180-taiping-revolution-volume-1.txt"
+  },
+  {
+    "title": "Ti-Ping Tien-Kwoh: The History of the Ti-Ping Revolution, Volume II",
+    "coverage": "A contemporary sympathetic account of the Taiping movement's military reversals, foreign intervention, internal defections, shrinking territory, fall of its cities, defeat, and retrospective explanations",
+    "source_page": "https://www.gutenberg.org/ebooks/39735",
+    "published_at": "1866-01-01",
+    "include_chunk_ranges": [[52, 62]],
+    "chunks_preselected": true,
+    "url": "https://www.gutenberg.org/cache/epub/39735/pg39735.txt",
+    "filename": "pg39735-taiping-revolution-volume-2.txt"
+  },
+  {
+    "title": "Paris under the Commune",
+    "coverage": "A hostile contemporary eyewitness account spanning the Commune's seizure of power, political organization, social response, conflict with Versailles, final fighting, collapse, and immediate aftermath",
+    "source_page": "https://www.gutenberg.org/ebooks/10861",
+    "published_at": "1871-01-01",
+    "include_chunk_ranges": [[0, 5], [9, 12], [39, 46]],
+    "chunks_preselected": true,
+    "url": "https://www.gutenberg.org/cache/epub/10861/pg10861.txt",
+    "filename": "pg10861-paris-under-the-commune.txt"
+  },
+  {
+    "title": "The Rise of Democracy",
+    "coverage": "A historical survey of British Chartism, including the People's Charter, working-class mobilization, petitions and demonstrations, strategic division, failure to win its immediate program, and longer political legacy",
+    "source_page": "https://www.gutenberg.org/ebooks/19609",
+    "published_at": "1911-01-01",
+    "include_chunk_ranges": [[14, 15]],
+    "chunks_preselected": true,
+    "url": "https://www.gutenberg.org/cache/epub/19609/pg19609.txt",
+    "filename": "pg19609-rise-of-democracy-chartism.txt"
+  },
+  {
+    "title": "General History of Africa VII: Africa under Colonial Domination 1880-1935 (Abridged Edition)",
+    "coverage": "A multi-author African history of the Maji Maji movement's causes, ideology and mobilization, armed resistance, colonial counteroffensive, famine and demographic losses, defeat, and religious legacy",
+    "source_page": "https://www.unesco.org/en/articles/general-history-africa-vii-africa-under-colonial-domination-1880-1935",
+    "published_at": "1990-01-01",
+    "include_chunk_ranges": [[6, 6], [14, 16], [35, 35], [38, 38]],
+    "chunks_preselected": true,
+    "url": "https://www.maktaba.org/download/file/1156/General_history_of_africa_-_volume_7_-_africa_under_colonial_domination_1880-1935_Albert_adu_boahen_editor.pdf",
+    "filename": "unesco-africa-vii-maji-maji.pdf"
+  }
+]

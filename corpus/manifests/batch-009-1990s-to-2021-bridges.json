@@ -1,0 +1,50 @@
+[
+  {
+    "title": "U.S.-China Relations",
+    "coverage": "China's post-Deng leadership transition, Hu-era governance, Xi Jinping's consolidation, and strategic reorientation through 2019",
+    "source_page": "https://www.congress.gov/crs_external_products/R/PDF/R45898/R45898.2.pdf",
+    "published_at": "2019-08-29",
+    "include_chunk_ranges": [[0, 2]],
+    "chunks_preselected": true,
+    "url": "https://www.congress.gov/crs_external_products/R/PDF/R45898/R45898.2.pdf",
+    "filename": "crs-china-transition-2019-08-29.pdf"
+  },
+  {
+    "title": "Russia: Domestic Politics and Economy",
+    "coverage": "Yeltsin's resignation, Putin's rise, managed succession, protest, institutional consolidation, and constitutional change through 2020",
+    "source_page": "https://www.congress.gov/crs_external_products/R/PDF/R46518/R46518.7.pdf",
+    "published_at": "2020-09-09",
+    "include_chunk_ranges": [[0, 3]],
+    "chunks_preselected": true,
+    "url": "https://www.congress.gov/crs_external_products/R/PDF/R46518/R46518.7.pdf",
+    "filename": "crs-russia-putin-era-2020-09-09.pdf"
+  },
+  {
+    "title": "India's New Government and Implications for U.S. Interests",
+    "coverage": "The BJP's rise from a national challenger in the 1990s to Narendra Modi's majority government in 2014",
+    "source_page": "https://www.congress.gov/crs_external_products/R/PDF/R43679/R43679.5.pdf",
+    "published_at": "2014-08-07",
+    "include_chunk_ranges": [[0, 1]],
+    "chunks_preselected": true,
+    "url": "https://www.congress.gov/crs_external_products/R/PDF/R43679/R43679.5.pdf",
+    "filename": "crs-india-bjp-rise-2014-08-07.pdf"
+  },
+  {
+    "title": "South Africa: Current Issues, Economy, and U.S. Relations",
+    "coverage": "ANC dominance after 1994, opposition growth, the Zuma crisis, and Ramaphosa's reform turn through 2019",
+    "source_page": "https://www.congress.gov/crs_external_products/R/PDF/R45687/R45687.4.pdf",
+    "published_at": "2019-09-30",
+    "include_chunk_ranges": [[0, 4]],
+    "chunks_preselected": true,
+    "url": "https://www.congress.gov/crs_external_products/R/PDF/R45687/R45687.4.pdf",
+    "filename": "crs-south-africa-post-apartheid-2019-09-30.pdf"
+  },
+  {
+    "title": "U.S.-Japan Relations: Political Transition in Tokyo",
+    "coverage": "Abe's 2012-2020 dominance, LDP coalition consolidation, and the transition to Suga through 2021",
+    "source_page": "https://www.congress.gov/crs_external_products/IF/PDF/IF10199/IF10199.15.pdf",
+    "published_at": "2021-02-02",
+    "url": "https://www.congress.gov/crs_external_products/IF/PDF/IF10199/IF10199.15.pdf",
+    "filename": "crs-japan-abe-transition-2021-02-02.pdf"
+  }
+]

@@ -20,7 +20,15 @@ from narrative_engine.composition.pipeline import (
     CompositionPipeline,
     _cluster_within_scope,
 )
-from narrative_engine.models import ArcPhase, ArcType, CycleScale, Episode
+from narrative_engine.models import (
+    Actor,
+    ArcPhase,
+    ArcType,
+    CycleScale,
+    Episode,
+    ScopeKind,
+    SituationScale,
+)
 from narrative_engine.storage.orm_models import CycleMembershipORM, CycleORM
 from narrative_engine.storage.repositories import EpisodeRepository
 
@@ -119,6 +127,67 @@ class TestTemporalGate:
 
         assert len(instances) == 1
 
+    def test_movement_scope_uses_generational_timing_without_actor_continuity(self):
+        first = _episode(
+            title="Movement organizes",
+            summary="A suffrage coalition establishes national organizations",
+            arc_type=ArcType.REFORM_THEN_REACTION,
+            arc_phase=ArcPhase.SETUP,
+            start_date=datetime(1900, 1, 1),
+            end_date=datetime(1900, 12, 31),
+            scope_id="uk_womens_suffrage_movement",
+            scope_kind=ScopeKind.MOVEMENT,
+            situation_scale=SituationScale.GROUP,
+            actors=[Actor(name="Early organizers", role="organizer")],
+        )
+        second = _episode(
+            title="Movement escalates",
+            summary="A later generation adopts militant suffrage tactics",
+            arc_type=ArcType.REFORM_THEN_REACTION,
+            arc_phase=ArcPhase.RISING_ACTION,
+            start_date=datetime(1910, 1, 1),
+            end_date=datetime(1910, 12, 31),
+            scope_id="uk_womens_suffrage_movement",
+            scope_kind=ScopeKind.MOVEMENT,
+            situation_scale=SituationScale.GROUP,
+            actors=[Actor(name="Later organizers", role="organizer")],
+        )
+
+        instances = compose_arc_instances_from_episodes(
+            [first, second],
+            arc_type=ArcType.REFORM_THEN_REACTION,
+        )
+
+        assert len(instances) == 1
+        assert instances[0].scale == CycleScale.GENERATIONAL
+
+    def test_signed_bce_years_participate_in_temporal_composition(self):
+        actor = Actor(name="Roman Senate", role="governing institution")
+        a = _episode(
+            start_date=None,
+            end_date=None,
+            start_year=-500,
+            end_year=-499,
+            arc_phase=ArcPhase.BOOM,
+            scope_id="rome",
+            actors=[actor],
+        )
+        b = _episode(
+            start_date=None,
+            end_date=None,
+            start_year=-498,
+            end_year=-497,
+            arc_phase=ArcPhase.EUPHORIA,
+            scope_id="rome",
+            actors=[actor],
+        )
+
+        instances = compose_arc_instances_from_episodes([a, b], ArcType.CREDIT_BOOM_AND_BUST)
+
+        assert len(instances) == 1
+        assert instances[0].scope_id == "rome"
+        assert "500 BCE–497 BCE" in instances[0].canonical_name
+
 
 class TestPhaseSequenceGate:
     """Stage 5: out-of-order phases hard-reject the merge."""
@@ -192,6 +261,29 @@ class TestNoSilentDrops:
 
 
 class TestPersistenceReconciliation:
+    @pytest.mark.asyncio
+    async def test_orm_conversion_preserves_raw_scope_and_signed_year(self, db_session):
+        episode = _episode(
+            start_date=None,
+            end_date=None,
+            start_year=-1200,
+            end_year=-1190,
+            arc_phase=ArcPhase.BOOM,
+            scope_id=None,
+            scope_name="Temudjin",
+            scope_kind="person",
+            scope_confidence=0.9,
+        )
+        await EpisodeRepository(db_session).create(episode)
+
+        instances = await CompositionPipeline(db_session).compose_arc_instances(
+            ArcType.CREDIT_BOOM_AND_BUST
+        )
+
+        assert len(instances) == 1
+        assert instances[0].scope_id == "genghis_khan"
+        assert "1200 BCE–1190 BCE" in instances[0].canonical_name
+
     @pytest.mark.asyncio
     async def test_repeated_composition_reuses_existing_instance(self, db_session):
         episode = _episode(

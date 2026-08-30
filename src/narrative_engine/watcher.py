@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import os
+import re
 import time
 from contextlib import suppress
 from dataclasses import dataclass
@@ -27,7 +29,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from narrative_engine.logging_config import get_logger
-from narrative_engine.models import SourceDocument, SourceDocumentStatus
+from narrative_engine.models import Episode, SourceDocument, SourceDocumentStatus
 from narrative_engine.storage.repositories import (
     EpisodeRepository,
     SourceDocumentRepository,
@@ -42,6 +44,7 @@ class ClaimLostError(RuntimeError):
 
 IGNORED_SUFFIXES = {".part", ".tmp", ".crdownload", ".swp"}
 HASH_CHUNK_SIZE = 1024 * 1024
+_DATED_SOURCE_RE = re.compile(r"(?:^|[-_])(\d{4})(?:-(\d{2})-(\d{2}))?$")
 
 
 def _hash_file(path: Path) -> tuple[str, int]:
@@ -53,6 +56,123 @@ def _hash_file(path: Path) -> tuple[str, int]:
             digest.update(chunk)
             size_bytes += len(chunk)
     return digest.hexdigest(), size_bytes
+
+
+def _source_publication_date(
+    filename: str,
+    provenance_path: Optional[Path] = None,
+) -> Optional[datetime]:
+    """Read a conservative publication date from a dated corpus filename.
+
+    Exact ISO dates remain exact. A year-only suffix is treated as available
+    at year end so a backtest earlier in that year cannot see it.
+    """
+    if provenance_path is not None:
+        try:
+            registry = json.loads(provenance_path.read_text(encoding="utf-8"))
+            entry = registry.get(filename)
+            if isinstance(entry, dict) and "published_at" in entry:
+                value = entry["published_at"]
+                # An explicit null means the source date is unknown. It must
+                # suppress filename inference because descriptive filenames
+                # often contain an event year rather than a publication year.
+                if value is None:
+                    return None
+                if isinstance(value, str):
+                    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+                    return (
+                        parsed.replace(tzinfo=timezone.utc)
+                        if parsed.tzinfo is None
+                        else parsed.astimezone(timezone.utc)
+                    )
+                logger.warning("source_provenance_date_invalid", filename=filename)
+                return None
+        except (AttributeError, json.JSONDecodeError, OSError, ValueError):
+            logger.warning("source_provenance_unreadable", filename=filename)
+
+    match = _DATED_SOURCE_RE.search(Path(filename).stem)
+    if match is None:
+        return None
+    year, month, day = match.groups()
+    try:
+        if month is None:
+            return datetime(int(year), 12, 31, tzinfo=timezone.utc)
+        return datetime(int(year), int(month), int(day), tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def _source_chunk_ranges(
+    filename: str,
+    provenance_path: Path,
+) -> tuple[tuple[int, int], ...] | None:
+    """Return intentionally selected inclusive chunk ranges, if configured."""
+    try:
+        registry = json.loads(provenance_path.read_text(encoding="utf-8"))
+        raw_ranges = registry.get(filename, {}).get("include_chunk_ranges")
+        if raw_ranges is None:
+            return None
+        ranges = tuple((int(item[0]), int(item[1])) for item in raw_ranges)
+        if any(start < 0 or end < start for start, end in ranges):
+            raise ValueError("invalid range")
+        return ranges
+    except (AttributeError, IndexError, json.JSONDecodeError, OSError, TypeError, ValueError):
+        logger.warning("source_chunk_ranges_unreadable", filename=filename)
+        return None
+
+
+def _source_chunks_preselected(filename: str, provenance_path: Path) -> bool:
+    """Whether range selection already supplied the narrative quality gate."""
+    try:
+        registry = json.loads(provenance_path.read_text(encoding="utf-8"))
+        return registry.get(filename, {}).get("chunks_preselected") is True
+    except (AttributeError, json.JSONDecodeError, OSError):
+        return False
+
+
+def _constrain_episode_to_source_date(
+    episode: Episode,
+    source_published_at: Optional[datetime],
+) -> bool:
+    """Keep extracted history on the evidence side of its source date.
+
+    Returns ``False`` when the episode begins after publication and therefore
+    cannot be an observed historical event in that source.  Ongoing episodes
+    are retained, but any end inferred beyond publication is capped at the
+    last date the source could have observed.  This is deliberately
+    conservative: forecasts and plans must not masquerade as realised events
+    in walk-forward evaluation.
+    """
+    if source_published_at is None:
+        return True
+
+    published = (
+        source_published_at.replace(tzinfo=timezone.utc)
+        if source_published_at.tzinfo is None
+        else source_published_at.astimezone(timezone.utc)
+    )
+    if episode.start_year is not None and episode.start_year > published.year:
+        return False
+    if episode.start_date is not None:
+        start = (
+            episode.start_date.replace(tzinfo=timezone.utc)
+            if episode.start_date.tzinfo is None
+            else episode.start_date.astimezone(timezone.utc)
+        )
+        if start > published:
+            return False
+
+    if episode.end_year is not None and episode.end_year > published.year:
+        episode.end_year = published.year
+    if episode.end_date is not None:
+        end = (
+            episode.end_date.replace(tzinfo=timezone.utc)
+            if episode.end_date.tzinfo is None
+            else episode.end_date.astimezone(timezone.utc)
+        )
+        if end > published:
+            episode.end_date = published
+    return True
 
 
 def llm_configured() -> bool:
@@ -69,6 +189,10 @@ class WatcherConfig:
     # Files must be untouched this long before pickup, so half-copied
     # files are never processed.
     settle_seconds: float = 2.0
+    # Claims are renewed every third of this interval. Keeping the lease
+    # short bounds restart recovery when a container is killed before its
+    # cancellation handler can release the active document.
+    lease_seconds: float = 180.0
 
     @classmethod
     def from_env(cls) -> "WatcherConfig":
@@ -76,6 +200,7 @@ class WatcherConfig:
             watch_dir=Path(os.getenv("NE_WATCH_DIR", "data/raw")),
             interval_seconds=float(os.getenv("NE_WATCH_INTERVAL", "3.0")),
             settle_seconds=float(os.getenv("NE_WATCH_SETTLE", "2.0")),
+            lease_seconds=float(os.getenv("NE_DOCUMENT_LEASE_SECONDS", "180.0")),
         )
 
 
@@ -237,6 +362,19 @@ class DocumentProcessor:
             if claim_lost.is_set():
                 raise ClaimLostError("document claim was replaced")
             document.status = SourceDocumentStatus.COMPLETED
+        except asyncio.CancelledError:
+            # A normal server restart cancels the watcher task. Release its
+            # lease immediately so the next process can resume from the last
+            # committed chunk instead of leaving the book stranded until the
+            # one-hour lease expires.
+            await session.rollback()
+            document.status = SourceDocumentStatus.QUEUED
+            document.error = None
+            if await repo.update_claimed(document, claim_token):
+                await session.commit()
+            else:
+                await session.rollback()
+            raise
         except ClaimLostError:
             await session.rollback()
             return None
@@ -275,6 +413,14 @@ class DocumentProcessor:
 
         parsed = parser.parse(path)
         chunks = SmartChunker().chunk_document(parsed)
+        source_published_at = _source_publication_date(
+            path.name,
+            path.parent / ".source-provenance.json",
+        )
+        included_ranges = _source_chunk_ranges(
+            path.name,
+            path.parent / ".source-provenance.json",
+        )
         # ParsedDocument retains the full text plus per-section copies. Once
         # chunking is complete, only the chunks are needed for the long LLM
         # phase, so release that duplicate document-sized object promptly.
@@ -296,16 +442,42 @@ class DocumentProcessor:
         if not remaining_chunks:
             arc_types_seen.update(await episode_repo.get_arc_types_for_chunks([chunk.chunk_id for chunk in chunks]))
 
-        for chunk in remaining_chunks:
+        for chunk_index, chunk in enumerate(
+            remaining_chunks,
+            start=document.chunks_processed,
+        ):
+            if included_ranges is not None and not any(
+                start <= chunk_index <= end for start, end in included_ranges
+            ):
+                document.chunks_processed += 1
+                if not await repo.update_claimed(document, claim_token):
+                    raise ClaimLostError("document claim was replaced")
+                await session.commit()
+                continue
             async with session.begin_nested():
+                process_options = {
+                    "text": chunk.content,
+                    "source_chunk_id": chunk.chunk_id,
+                    "session": session,
+                }
                 result = await extractor.process_text(
-                    text=chunk.content,
-                    source_chunk_id=chunk.chunk_id,
-                    session=session,
+                    **process_options,
                 )
                 if result.errors:
                     raise RuntimeError("; ".join(result.errors))
+                retained_episodes = []
                 for episode in result.episodes:
+                    episode.source_published_at = source_published_at
+                    if not _constrain_episode_to_source_date(episode, source_published_at):
+                        logger.warning(
+                            "future_episode_discarded",
+                            episode_title=episode.title,
+                            start_year=episode.start_year,
+                            source_published_at=source_published_at,
+                        )
+                        await episode_repo.delete(episode.id)
+                        continue
+                    await episode_repo.update_source_temporal_bounds(episode)
                     await episode_repo.update_embedding(
                         episode.id,
                         embedder.generate_surface_embedding(episode),
@@ -318,6 +490,8 @@ class DocumentProcessor:
                     )
                     if episode.arc_type:
                         arc_types_seen.add(episode.arc_type)
+                    retained_episodes.append(episode)
+                result.episodes = retained_episodes
                 if claim_lost.is_set():
                     raise ClaimLostError("document claim was replaced")
             document.episodes_created += len(result.episodes)
@@ -328,6 +502,30 @@ class DocumentProcessor:
             if not await repo.update_claimed(document, claim_token):
                 raise ClaimLostError("document claim was replaced")
             await session.commit()
+
+        reconcile_phases = getattr(extractor, "reconcile_document_phases", None)
+        if callable(reconcile_phases):
+            reconciled = await reconcile_phases(
+                [chunk.chunk_id for chunk in chunks],
+                session,
+            )
+            for episode in reconciled:
+                if episode.arc_type:
+                    arc_types_seen.add(episode.arc_type)
+                # Phase and arc labels participate in the structural render;
+                # refresh only that vector after document-level correction.
+                await episode_repo.update_embedding(
+                    episode.id,
+                    embedder.generate_structural_embedding(episode),
+                    kind="structural",
+                )
+
+        link_candidates = getattr(extractor, "link_document_candidates", None)
+        if callable(link_candidates):
+            await link_candidates(
+                [chunk.chunk_id for chunk in chunks],
+                session,
+            )
 
         # Composition pass: stitch the new episodes (plus any existing
         # same-scope ones) into arc instances the dashboard can render.
@@ -368,6 +566,12 @@ async def scan_once(
     for path in _settled_files(config.watch_dir, config.settle_seconds):
         try:
             document = await processor.process_file(session, path)
+        except FileNotFoundError:
+            # A batch monitor may remove a completed source after this scan
+            # listed it but before processing begins.  Cleanup is expected and
+            # should not be reported as an ingestion failure.
+            logger.debug("watcher_source_removed_during_scan", path=str(path))
+            continue
         except Exception as exc:  # unreadable file etc. — keep scanning
             logger.error("watcher_scan_error", path=str(path), error=str(exc))
             continue
@@ -381,7 +585,7 @@ async def watch_loop(config: Optional[WatcherConfig] = None) -> None:
     from narrative_engine.storage.database import db_manager
 
     config = config or WatcherConfig.from_env()
-    processor = DocumentProcessor()
+    processor = DocumentProcessor(lease_seconds=config.lease_seconds)
     logger.info(
         "watcher_started",
         watch_dir=str(config.watch_dir),

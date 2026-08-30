@@ -3,120 +3,695 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Narrative Engine · Arc Space</title>
+<title>Narrative Engine · Historical Arcs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@4.6.0/fonts/remixicon.css" rel="stylesheet">
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <style>
 :root {
-  --bg:#080b10; --panel:#0f141c; --panel2:#131a24; --line:#222c39;
-  --text:#edf1f7; --muted:#8894a6; --accent:#7aa2ff; --cyan:#54d6d2;
-  --green:#65d391; --amber:#e7ba62; --red:#f07979; --purple:#b794f6;
-  --shadow:0 16px 50px rgba(0,0,0,.28);
+  --bg:#080b10;--panel:#0e141d;--panel-2:#111923;--panel-3:#0a1017;--line:#202b39;
+  --line-strong:#334258;--text:#eef2f8;--muted:#8f9bae;--subtle:#657186;--accent:#668ff4;
+  --cyan:#4bc7c4;--green:#65c98f;--amber:#e4b65f;--orange:#ee865e;--rose:#d66591;
+  --purple:#a77bf2;--blue:#5c83d9;--shadow:0 18px 48px rgba(0,0,0,.22)
 }
-*{box-sizing:border-box} [hidden]{display:none!important} html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text)}
-body{font:13px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-button,select,input{font:inherit}.shell{min-height:100vh;background:radial-gradient(circle at 25% -10%,rgba(92,125,225,.12),transparent 34%),var(--bg)}
-header{height:62px;padding:0 24px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:28px;background:rgba(8,11,16,.86);backdrop-filter:blur(18px);position:sticky;top:0;z-index:20}
-.brand{font-weight:680;letter-spacing:.12em;font-size:13px;white-space:nowrap}.brand i{color:var(--accent);font-style:normal}.nav{display:flex;align-self:stretch;gap:4px}
-.nav button{border:0;background:transparent;color:var(--muted);padding:0 15px;cursor:pointer;border-bottom:2px solid transparent}.nav button.active{color:var(--text);border-color:var(--accent)}
-.stats{margin-left:auto;display:flex;gap:18px;color:var(--muted);font-size:12px}.stats b{color:var(--text);font-weight:600}.updated{min-width:76px;text-align:right}
-main{padding:18px 22px 28px;max-width:1800px;margin:auto}.tab{display:none}.tab.active{display:block}.card{background:linear-gradient(180deg,rgba(18,24,34,.98),rgba(13,18,26,.98));border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
-.section-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}.section-head h2{margin:0;font-size:13px;letter-spacing:.08em;text-transform:uppercase}.eyebrow{color:var(--accent);font:11px/1.2 ui-monospace,monospace;letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px}.muted{color:var(--muted)}
-.notice{border:1px solid rgba(122,162,255,.25);background:rgba(122,162,255,.07);color:#b8c6e7;border-radius:8px;padding:9px 12px;font-size:12px}.overview-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.overview-grid .wide{grid-column:1/-1}.pad{padding:15px 17px}
-.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:11px 14px;margin-bottom:12px}.control{display:flex;align-items:center;gap:7px;color:var(--muted)}
-select,input[type=number]{background:#0a0f16;color:var(--text);border:1px solid var(--line);border-radius:7px;padding:6px 9px;outline:none}select:focus,input:focus{border-color:var(--accent)}
-.toggle{display:inline-flex;align-items:center;gap:6px;padding:5px 8px;border-radius:7px;border:1px solid var(--line);cursor:pointer;color:var(--muted);user-select:none}.toggle input{accent-color:var(--accent)}
-.action{background:transparent;border:1px solid var(--line);color:var(--text);border-radius:7px;padding:6px 10px;cursor:pointer}.action:hover{border-color:var(--accent);color:var(--accent)}
-.arc-grid{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(300px,.8fr);grid-template-rows:minmax(570px,67vh) auto;gap:12px}.plot-card{position:relative;overflow:hidden}.plot-wrap{height:100%;min-height:560px}.plot-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);pointer-events:none}.plot-meta{position:absolute;left:14px;top:12px;z-index:5;padding:7px 9px;background:rgba(8,11,16,.74);border:1px solid var(--line);border-radius:7px;color:var(--muted);font-size:11px;backdrop-filter:blur(10px)}
-.inspector{padding:16px;overflow:auto}.inspector h3{font-size:19px;line-height:1.25;margin:3px 0 5px}.chips{display:flex;gap:6px;flex-wrap:wrap;margin:11px 0}.chip{padding:3px 7px;border:1px solid var(--line);background:#0b1119;border-radius:999px;color:#b8c3d4;font-size:11px}.chip.phase{border-color:rgba(84,214,210,.35);color:var(--cyan)}
-.kv{display:grid;grid-template-columns:112px 1fr;gap:6px 10px;padding:12px 0;border-top:1px solid var(--line)}.kv dt{color:var(--muted)}.kv dd{margin:0;word-break:break-word}.metric{padding:9px 10px;border-radius:8px;background:#0a0f16;border:1px solid var(--line);margin:7px 0}.metric strong{display:block;font-size:16px}.metric span{color:var(--muted);font-size:11px}.why{border-left:2px solid var(--accent);padding:8px 10px;margin:10px 0;background:rgba(122,162,255,.06)}
-.neighbor{display:block;width:100%;text-align:left;padding:8px 9px;margin:5px 0;background:#0a0f16;border:1px solid var(--line);border-radius:8px;color:var(--text);cursor:pointer}.neighbor:hover{border-color:var(--accent)}.neighbor small{display:block;color:var(--muted)}
-.axes{display:grid;gap:7px;margin:10px 0 15px}.axis-row{display:grid;grid-template-columns:82px 1fr 38px;align-items:center;gap:8px;color:var(--muted);font-size:11px}.axis-track{height:6px;background:#080c12;border-radius:9px;position:relative;overflow:hidden}.axis-track:after{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:#455063}.axis-fill{height:100%;background:linear-gradient(90deg,var(--purple),var(--cyan));border-radius:9px}.scope-path{color:#b7c7e5;font-size:11px;margin:5px 0}.scope-path span+span:before{content:" › ";color:#536071}.scope-note{border-left:2px solid var(--amber);padding:7px 9px;background:rgba(231,186,98,.06);color:#c8b98f;font-size:11px}
-.timeline-card{grid-column:1/-1;padding:14px 16px;overflow:hidden}.timeline{display:flex;gap:8px;overflow-x:auto;padding:4px 1px 8px}.beat{position:relative;min-width:190px;max-width:240px;padding:11px 12px;border:1px solid var(--line);border-radius:9px;background:#0a0f16;cursor:pointer}.beat:hover,.beat.selected{border-color:var(--accent)}.beat:after{content:"→";position:absolute;right:-13px;top:28px;color:#536071}.beat:last-child:after{display:none}.beat .date{font:10px ui-monospace,monospace;color:var(--muted)}.beat .phase{color:var(--cyan);font-size:10px;text-transform:uppercase;letter-spacing:.06em}.beat strong{display:block;margin:4px 0;line-height:1.25}.gap{border-style:dashed;opacity:.65}
-.legend{display:flex;gap:13px;flex-wrap:wrap;color:var(--muted);font-size:11px}.legend span:before{content:"";width:15px;height:2px;display:inline-block;vertical-align:middle;margin-right:5px;background:var(--accent)}.legend .causal:before{background:var(--amber)}.legend .temporal:before{background:var(--cyan)}.legend .neighbor-key:before{background:#506078}.legend .inferred:before{height:0;border-top:2px dashed var(--purple);background:transparent}
-table{width:100%;border-collapse:collapse}th{text-align:left;color:var(--muted);font-weight:500;border-bottom:1px solid var(--line);padding:6px 8px}td{padding:7px 8px;border-bottom:1px solid rgba(34,44,57,.55);vertical-align:top}.badge{padding:2px 7px;border-radius:99px;font-size:11px}.completed{background:#163322;color:var(--green)}.processing,.queued{background:#352e18;color:var(--amber)}.failed{background:#3a1c20;color:var(--red)}.duplicate{background:#2d2040;color:var(--purple)}progress{width:85px;height:7px;accent-color:var(--accent)}
-.arc-list-item{margin:0 0 17px}.arc-name{display:flex;justify-content:space-between;margin-bottom:6px}.lane{display:flex;gap:4px}.lane .phase{flex:1;height:23px;border:1px solid var(--line);border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:10px}.lane .covered{border-color:var(--accent);background:rgba(122,162,255,.12);color:#9db9ff}.eps{margin-top:6px;color:var(--muted);font-size:11px}.empty{padding:14px;color:var(--muted);font-style:italic}
-@media(max-width:1000px){.arc-grid{grid-template-columns:1fr;grid-template-rows:520px auto auto}.timeline-card{grid-column:auto}.overview-grid{grid-template-columns:1fr}.overview-grid .wide{grid-column:auto}.stats .optional{display:none}}@media(max-width:700px){header{padding:0 12px;gap:10px}.brand{font-size:11px}.nav button{padding:0 8px}.stats{display:none}main{padding:10px}.controls{align-items:flex-start}.arc-grid{grid-template-rows:440px auto auto}.plot-wrap{min-height:430px}}
+*{box-sizing:border-box}[hidden]{display:none!important}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text)}
+body{font:13px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+button,select,input{font:inherit}button{color:inherit}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.shell{min-height:100vh;background:var(--bg)}
+header{height:62px;padding:0 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:26px;background:rgba(8,11,16,.96);position:sticky;top:0;z-index:30}
+.brand{font-weight:700;letter-spacing:.13em;font-size:13px;white-space:nowrap}
+.brand-mark{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--accent);margin-left:6px}
+.nav{display:flex;align-self:stretch;gap:2px;overflow-x:auto}
+.nav button{border:0;background:transparent;color:var(--muted);padding:0 14px;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;display:flex;gap:7px;align-items:center}
+.nav button:hover{color:var(--text)}.nav button.active{color:var(--text);border-color:var(--accent)}
+.stats{margin-left:auto;display:flex;gap:17px;color:var(--muted);font-size:11px;white-space:nowrap}
+.stats b{color:var(--text);font-weight:650;margin-left:4px}.updated{min-width:82px;text-align:right}
+main{padding:14px 20px 24px;max-width:1920px;margin:auto}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:11px;box-shadow:var(--shadow)}
+.tab{display:none}.tab.active{display:block}
+.eyebrow{color:#88a8f7;font:10px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.11em;text-transform:uppercase}
+.muted{color:var(--muted)}.section-title{font-size:14px;line-height:1.2;margin:4px 0 0;letter-spacing:.02em}
+.controls{min-height:78px;padding:10px 13px;margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.control{display:grid;gap:4px;color:var(--muted);font-size:10px;letter-spacing:.06em;text-transform:uppercase}
+.control select,.control input,.search-input{height:34px;background:var(--panel-3);color:var(--text);border:1px solid var(--line);border-radius:7px;padding:0 10px;text-transform:none;letter-spacing:0;min-width:126px}
+.control.scope select{min-width:190px}.control.date input{width:92px;min-width:92px}
+.control select:hover,.control input:hover,.search-input:hover{border-color:var(--line-strong)}
+.control-spacer{flex:1}
+.action{min-height:34px;background:var(--panel-3);border:1px solid var(--line);color:var(--text);border-radius:7px;padding:7px 11px;cursor:pointer;display:inline-flex;align-items:center;gap:7px}
+.action:hover{border-color:var(--accent);color:#bcd0ff}.action.primary{background:#1d438e;border-color:#315bb3}
+.action[aria-pressed="true"]{border-color:var(--accent);background:rgba(102,143,244,.14)}
+.selection-meta{color:var(--muted);font-size:11px;white-space:nowrap}
+.view-grid{display:grid;grid-template-columns:minmax(0,1fr) 286px;gap:12px;align-items:stretch}
+.viz-card{min-width:0;overflow:hidden}
+.view-head{min-height:55px;padding:12px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:14px}
+.view-head-copy p{margin:4px 0 0;color:var(--muted);font-size:11px}
+.view-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.plot{height:630px;min-height:520px}
+.plot-note{padding:8px 14px;border-top:1px solid var(--line);color:var(--muted);font-size:11px;display:flex;justify-content:space-between;gap:12px}
+.phase-legend{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.legend-item{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.swatch{width:8px;height:8px;border-radius:50%;background:var(--swatch)}
+.inspector{min-height:742px;padding:15px;overflow:auto}.inspector.empty-state{display:flex;flex-direction:column;justify-content:center}
+.inspector h2{font-size:19px;line-height:1.25;margin:7px 0 4px;letter-spacing:-.02em}
+.inspector-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.icon-button{width:32px;height:32px;border:1px solid var(--line);border-radius:7px;background:var(--panel-3);cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.icon-button:hover{border-color:var(--accent)}.inspector-date{color:var(--muted);font-size:12px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:11px 0}
+.chip{padding:3px 7px;border:1px solid var(--line);border-radius:999px;background:var(--panel-3);color:#b9c5d6;font-size:10px}
+.chip.phase{border-color:color-mix(in srgb,var(--phase) 55%,var(--line));color:var(--phase)}
+.chip.formed,.formation-badge.formed{border-color:rgba(101,201,143,.45);background:rgba(101,201,143,.1);color:var(--green)}
+.chip.candidate,.formation-badge.candidate{border-color:rgba(228,182,95,.42);background:rgba(228,182,95,.09);color:var(--amber)}
+.inspector-summary{font-size:12px;line-height:1.6;color:#d8dee8}
+.confidence{display:grid;grid-template-columns:72px 1fr 36px;gap:8px;align-items:center;margin:14px 0;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+.confidence-track{height:5px;background:#1a2431;border-radius:8px;overflow:hidden}.confidence-track span{display:block;height:100%;background:var(--cyan);border-radius:8px}
+.inspector-section{padding-top:12px;margin-top:12px;border-top:1px solid var(--line)}
+.inspector-section h3{margin:0 0 8px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.08em}
+.inspector-section p{margin:0;color:#cdd5e2;font-size:11px;line-height:1.55}
+.scope-path{color:#a9b9d5;font-size:10px;margin:5px 0;word-break:break-word}
+.source-row{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:11px}
+.empty{padding:24px;color:var(--muted);text-align:center}.loading{min-height:300px;display:grid;place-items:center;color:var(--muted)}
+.river-layout .viz-card{min-height:742px}.river-layout .inspector{height:742px}
+.story-shell{display:grid;gap:12px}
+.story-summary{display:grid;grid-template-columns:minmax(320px,1.7fr) repeat(4,minmax(130px,.7fr));min-height:82px}
+.story-summary>div{padding:13px 16px;border-right:1px solid var(--line)}.story-summary>div:last-child{border-right:0}
+.story-summary strong{display:block;font-size:17px;margin-top:4px;line-height:1.15}.summary-label{color:#88a8f7;font-size:9px;text-transform:uppercase;letter-spacing:.08em}
+.storyboard-card{overflow:auto}.storyboard-grid{display:grid;grid-template-columns:180px repeat(6,minmax(165px,1fr));min-width:1180px}
+.phase-head,.facet-head,.story-cell{border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.phase-head{min-height:60px;padding:9px 10px;text-align:center;background:var(--panel-2)}
+.phase-head strong{display:block;color:var(--phase);font-size:11px;letter-spacing:.06em;text-transform:uppercase}.phase-head span{display:block;color:var(--muted);font-size:10px;margin-top:4px}
+.facet-head{padding:10px;background:var(--panel-2);display:flex;gap:9px;align-items:flex-start;min-height:76px}
+.facet-head i{color:var(--facet);font-size:18px}.facet-head strong{display:block;font-size:12px}.facet-head span{color:var(--muted);font-size:10px}
+.story-cell{padding:7px;min-height:76px;background:var(--panel)}
+.episode-card{width:100%;text-align:left;padding:8px;border:1px solid var(--line);border-left:2px solid var(--phase);border-radius:7px;background:var(--panel-3);color:var(--text);cursor:pointer;margin-bottom:6px}
+.episode-card:hover{border-color:var(--phase)}.episode-card.selected{box-shadow:0 0 0 1px var(--accent);background:#111c2c}
+.episode-card strong{display:block;font-size:10px;line-height:1.3}.episode-card span{color:var(--muted);font-size:9px}.more-count{color:var(--muted);font-size:9px;padding:2px 3px}
+.story-inspector{min-height:150px;padding:13px 16px;display:grid;grid-template-columns:260px minmax(0,1fr) 220px;gap:18px}
+.story-inspector h2{font-size:17px;margin:5px 0}.story-inspector .inspector-section{margin:0;padding:0;border:0}
+.constellation-grid{display:grid;grid-template-columns:224px minmax(0,1fr) 274px;grid-template-rows:610px 158px;gap:12px}
+.facet-tree{padding:13px;overflow:auto}.facet-tree h2{font-size:12px;margin:5px 0 11px}
+.facet-toggle{display:flex;gap:8px;align-items:center;padding:7px 5px;border-bottom:1px solid rgba(32,43,57,.6)}
+.facet-toggle input{accent-color:var(--facet)}.facet-toggle strong{font-size:11px}.facet-toggle small{display:block;color:var(--muted);font-size:9px}
+.tree-note{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);color:var(--muted);font-size:10px;line-height:1.5}
+.constellation-plot{height:608px}.constellation-grid .inspector{min-height:610px;height:610px}
+.constellation-timeline{grid-column:1/-1;overflow:hidden}.timeline-head{height:40px;padding:10px 13px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between}
+#constellation-timeline-plot{height:116px}.similarity-layout .plot{height:630px}
+.notice{color:#b8c7e2;background:rgba(102,143,244,.07);border:1px solid rgba(102,143,244,.23);border-radius:7px;padding:7px 10px;font-size:10px}
+.operations-grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(340px,.6fr);gap:12px}.operations-grid .wide{grid-row:span 3}
+.pad{padding:14px 16px}.ops-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:12px}
+.arc-list{display:grid;gap:8px;max-height:690px;overflow:auto;padding-right:3px}.arc-row{padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--panel-3)}
+.arc-row.candidate{border-style:dashed}.arc-row-head{display:flex;justify-content:space-between;gap:10px;margin-bottom:7px}.arc-row-head span{color:var(--muted);font-size:10px}
+.arc-title{display:flex;align-items:center;gap:7px;min-width:0}.formation-badge{padding:2px 6px;border:1px solid var(--line);border-radius:999px;font-size:8px;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+.arc-evidence{display:flex;gap:12px;margin-top:7px;color:var(--muted);font-size:9px}.arc-evidence .warning{color:var(--amber)}
+.phase-track{display:flex;gap:3px}.phase-segment{height:5px;flex:1;border-radius:6px;background:#1b2532}.phase-segment.covered{background:var(--accent)}
+.quality-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.quality-metric{padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--panel-3)}
+.quality-metric strong{display:block;font-size:18px}.quality-metric span{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.06em}.quality-note{margin:10px 0 0;color:var(--muted);font-size:10px;line-height:1.55}
+table{width:100%;border-collapse:collapse}th{text-align:left;color:var(--muted);font-weight:500;border-bottom:1px solid var(--line);padding:7px}
+td{padding:8px 7px;border-bottom:1px solid rgba(32,43,57,.62);font-size:11px;vertical-align:top}
+.badge{padding:2px 6px;border-radius:99px;font-size:9px}.completed{background:#163322;color:var(--green)}.processing,.queued{background:#352e18;color:var(--amber)}.failed{background:#3a1c20;color:#ff9c9c}.duplicate{background:#2d2040;color:#c9a6ff}
+.review-actions{display:flex;gap:5px}.review-actions .action{min-height:28px;padding:4px 7px;font-size:10px}
+@media(max-width:1180px){
+  .stats .optional{display:none}.view-grid{grid-template-columns:1fr}.view-grid .inspector{min-height:360px;height:auto}
+  .constellation-grid{grid-template-columns:210px minmax(0,1fr);grid-template-rows:560px auto 150px}.constellation-grid .inspector{grid-column:1/-1;min-height:320px;height:auto}
+  .constellation-timeline{grid-column:1/-1}.story-summary{grid-template-columns:1.5fr repeat(2,1fr)}.story-summary>div:nth-child(n+4){display:none}
+}
+@media(max-width:760px){
+  header{padding:0 12px;gap:10px}.brand{font-size:10px}.nav button{padding:0 9px}.nav button i{display:none}.stats{display:none}
+  main{padding:10px}.controls{align-items:flex-end}.control-spacer{display:none}.selection-meta{width:100%}.plot{height:520px;min-height:440px}
+  .constellation-grid{display:block}.facet-tree{margin-bottom:10px}.constellation-grid>.card{margin-bottom:10px}.story-inspector{grid-template-columns:1fr}.operations-grid{grid-template-columns:1fr}
+}
 </style>
 </head>
-<body><div class="shell">
-<header>
-  <div class="brand">NARRATIVE ENGINE <i>●</i></div>
-  <nav class="nav"><button data-tab="arc-space" class="active">Arc Space</button><button data-tab="overview">Operations</button></nav>
-  <div class="stats"><span>episodes <b id="stat-episodes">–</b></span><span class="optional">arcs <b id="stat-instances">–</b></span><span class="optional">reviews <b id="stat-reviews">–</b></span><span class="updated" id="stat-updated"></span></div>
-</header>
-<main>
-<section id="tab-arc-space" class="tab active">
-  <div class="notice" style="margin-bottom:12px"><b>Interpretation note.</b> Position is a 3D PCA projection for exploration. Color shows scale-neutral change pattern; filters reveal the same pattern across personal, group, political, cultural, economic, and civilizational contexts.</div>
-  <div class="card controls">
-    <label class="control">Pattern <select id="filter-pattern"><option value="">All patterns</option></select></label>
-    <label class="control">Scale <select id="filter-scale"><option value="">All scales</option></select></label>
-    <label class="control">Domain <select id="filter-domain"><option value="">All domains</option></select></label>
-    <label class="control">Scope <select id="filter-scope"><option value="">All scopes</option></select></label>
-    <label class="control">Neighbors <input id="filter-k" type="number" min="1" max="10" value="3" style="width:54px"></label>
-    <label class="toggle"><input id="show-trajectories" type="checkbox" checked> Subject trajectories</label>
-    <label class="toggle"><input id="show-causal" type="checkbox" checked> Evidence links</label>
-    <label class="toggle"><input id="show-neighbors" type="checkbox"> kNN links</label>
-    <button class="action" id="reset-view">Reset view</button>
-    <span class="muted" id="space-count"></span>
-  </div>
-  <div class="arc-grid">
-    <div class="card plot-card"><div class="plot-meta" id="projection-meta">loading projection…</div><div id="arc-plot" class="plot-wrap"></div><div id="plot-empty" class="plot-empty" hidden>No structural embeddings available yet.</div></div>
-    <aside class="card inspector" id="inspector"><div class="eyebrow">Evidence inspector</div><h3>Select an episode</h3><p class="muted">Click a node to inspect its classification, mechanisms, source provenance, and nearest structural analogs.</p></aside>
-    <div class="card timeline-card"><div class="section-head"><div><div class="eyebrow">Change progression</div><h2 id="timeline-title">Chronological observations</h2></div><div class="legend"><span class="temporal">focal-scope sequence</span><span>legacy arc</span><span class="inferred">inferred arc</span><span class="causal">causal</span><span class="neighbor-key">neighbor</span></div></div><div class="timeline" id="timeline"></div></div>
-  </div>
-</section>
-<section id="tab-overview" class="tab">
-  <div class="overview-grid">
-    <div class="card pad wide"><div class="section-head"><div><div class="eyebrow">Composition</div><h2>Arc instances · phase coverage</h2></div></div><div id="arcs"><div class="empty">No arc instances yet.</div></div></div>
-    <div class="card pad"><div class="section-head"><div><div class="eyebrow">Ingestion</div><h2>Processing queue</h2></div></div><div id="queue"></div></div>
-    <div class="card pad"><div class="section-head"><div><div class="eyebrow">Human review</div><h2>Pending structural claims</h2></div></div><div id="review"></div></div>
-  </div>
-</section>
-</main></div>
+<body>
+<div class="shell">
+  <header>
+    <div class="brand">NARRATIVE ENGINE<span class="brand-mark" aria-hidden="true"></span></div>
+    <nav class="nav" aria-label="Primary views">
+      <button class="active" data-tab="river"><i class="ri-water-flash-line" aria-hidden="true"></i>Facet River</button>
+      <button data-tab="storyboard"><i class="ri-layout-column-line" aria-hidden="true"></i>Arc Storyboard</button>
+      <button data-tab="constellation"><i class="ri-node-tree" aria-hidden="true"></i>Constellation</button>
+      <button data-tab="similarity"><i class="ri-bubble-chart-line" aria-hidden="true"></i>Similarity Space</button>
+      <button data-tab="operations"><i class="ri-settings-4-line" aria-hidden="true"></i>Operations</button>
+    </nav>
+    <div class="stats"><span>episodes <b id="stat-episodes">–</b></span><span class="optional">formed arcs <b id="stat-instances">–</b></span><span class="optional">candidates <b id="stat-candidates">–</b></span><span class="optional">reviews <b id="stat-reviews">–</b></span><span class="updated" id="stat-updated"></span></div>
+  </header>
+  <main>
+    <div id="analysis-controls" class="card controls">
+      <label class="control scope">Scope<select id="filter-scope"><option value="">All scopes</option></select></label>
+      <label class="control">Scale<select id="filter-scale"><option value="">All scales</option></select></label>
+      <label class="control">Domain<select id="filter-domain"><option value="">All domains</option></select></label>
+      <label class="control">Pattern<select id="filter-pattern"><option value="">All patterns</option></select></label>
+      <label class="control date">From<input id="filter-start" type="number" aria-label="Start year"></label>
+      <label class="control date">To<input id="filter-end" type="number" aria-label="End year"></label>
+      <button class="action" id="compare-toggle" aria-pressed="false"><i class="ri-scales-3-line" aria-hidden="true"></i>Compare</button>
+      <label class="control scope" id="compare-control" hidden>Against<select id="filter-compare"><option value="">Choose scope</option></select></label>
+      <div class="control-spacer"></div>
+      <button class="action" id="reset-filters"><i class="ri-restart-line" aria-hidden="true"></i>Reset</button>
+      <span class="selection-meta" id="selection-meta">Loading corpus…</span>
+    </div>
+    <section id="tab-river" class="tab active">
+      <div class="view-grid river-layout">
+        <article class="card viz-card">
+          <div class="view-head"><div class="view-head-copy"><div class="eyebrow">Cross-facet chronology</div><h1 class="section-title" id="river-title">How arcs form through time</h1><p>Markers are observations; lines require at least three episodes spanning two phases.</p></div><div class="view-tools"><button class="action" id="river-fit"><i class="ri-focus-3-line" aria-hidden="true"></i>Fit range</button></div></div>
+          <div id="river-plot" class="plot" aria-label="Facet river timeline"></div>
+          <div class="plot-note"><div class="phase-legend" id="phase-legend"></div><span id="river-meta"></span></div>
+        </article>
+        <aside class="card inspector" data-inspector aria-live="polite"></aside>
+      </div>
+    </section>
+    <section id="tab-storyboard" class="tab">
+      <div class="story-shell">
+        <div class="card story-summary" id="story-summary"></div>
+        <article class="card storyboard-card">
+          <div class="view-head"><div class="view-head-copy"><div class="eyebrow">Phase matrix</div><h1 class="section-title">Arc Storyboard</h1><p>Scan evidence by facet and recurring phase without losing chronological context.</p></div><div class="view-tools"><label class="action"><input id="story-focus-only" type="checkbox"> Related to selection</label></div></div>
+          <div id="storyboard-grid" class="storyboard-grid"></div>
+        </article>
+        <aside class="card story-inspector" data-inspector aria-live="polite"></aside>
+      </div>
+    </section>
+    <section id="tab-constellation" class="tab">
+      <div class="constellation-grid">
+        <aside class="card facet-tree"><div class="eyebrow">Scope & facets</div><h2 id="facet-tree-title">Current scope</h2><div id="facet-toggles"></div><div class="tree-note">Enclosures show containment. Solid paths meet the formation threshold; isolated markers remain candidates. Highlighted links show evidence shared with the selected episode.</div><label class="action" style="margin-top:12px"><input id="constellation-links" type="checkbox" checked> Selected links</label></aside>
+        <article class="card viz-card"><div class="view-head"><div class="view-head-copy"><div class="eyebrow">Nested scope map</div><h1 class="section-title">Constellation</h1><p>See subgroups inside a larger society and trace their influence across facets.</p></div><div class="view-tools phase-legend"><span class="legend-item"><span class="swatch" style="--swatch:var(--cyan)"></span>selected relation</span><span class="legend-item"><span class="swatch" style="--swatch:var(--subtle)"></span>subject trajectory</span></div></div><div id="constellation-plot" class="constellation-plot" aria-label="Nested facet constellation"></div></article>
+        <aside class="card inspector" data-inspector aria-live="polite"></aside>
+        <article class="card constellation-timeline"><div class="timeline-head"><span class="eyebrow">Historical timeline</span><span class="muted" id="constellation-meta"></span></div><div id="constellation-timeline-plot" aria-label="Synchronized historical timeline"></div></article>
+      </div>
+    </section>
+    <section id="tab-similarity" class="tab">
+      <div class="view-grid similarity-layout">
+        <article class="card viz-card">
+          <div class="view-head"><div class="view-head-copy"><div class="eyebrow">Structural analogs</div><h1 class="section-title">Similarity Space</h1><p>The projection is exploratory; similarity is calculated in the original embedding space.</p></div><div class="view-tools"><label class="action"><input id="show-trajectories" type="checkbox" checked> Trajectories</label><label class="action"><input id="show-neighbors" type="checkbox"> Neighbors</label><button class="action" id="similarity-reset"><i class="ri-restart-line" aria-hidden="true"></i>Reset view</button></div></div>
+          <div id="similarity-status" class="notice" style="margin:10px 12px 0">Similarity data loads only when this view is opened.</div><div id="similarity-plot" class="plot" aria-label="Three-dimensional structural similarity projection"></div><div class="plot-note"><span id="similarity-meta">Projection not loaded</span><span>3D position is approximate</span></div>
+        </article>
+        <aside class="card inspector" data-inspector aria-live="polite"></aside>
+      </div>
+    </section>
+    <section id="tab-operations" class="tab">
+      <div class="operations-grid">
+        <article class="card pad wide"><div class="ops-head"><div><div class="eyebrow">Composition</div><h1 class="section-title">Formed arcs & candidates</h1></div><div class="view-tools"><select id="arc-formation-filter" class="search-input" aria-label="Arc formation status"><option value="formed">Formed arcs</option><option value="candidate">Candidates</option><option value="all">All classifications</option></select><input id="arc-search" class="search-input" type="search" placeholder="Search arcs or scopes"></div></div><div class="notice" style="margin-bottom:10px">A formed arc requires 3+ episodes across 2+ distinct phases. Source and review badges describe evidence quality separately.</div><div id="arcs" class="arc-list"><div class="loading">Loading arc evidence…</div></div><div style="display:flex;justify-content:center;margin-top:12px"><button class="action" id="show-more-arcs">Show more</button></div></article>
+        <article class="card pad"><div class="ops-head"><div><div class="eyebrow">Corpus audit</div><h2 class="section-title">Data quality</h2></div></div><div id="quality"></div></article>
+        <article class="card pad"><div class="ops-head"><div><div class="eyebrow">Ingestion</div><h2 class="section-title">Processing queue</h2></div></div><div id="queue"></div></article>
+        <article class="card pad"><div class="ops-head"><div><div class="eyebrow">Human review</div><h2 class="section-title">Pending claims</h2></div></div><div id="review"></div></article>
+      </div>
+    </section>
+  </main>
+</div>
 <script>
-const $=id=>document.getElementById(id);const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const COLORS=['#7aa2ff','#54d6d2','#b794f6','#e7ba62','#65d391','#f07979','#5eb0ef','#e28fcb','#9bbb5a','#d5915b','#8b9aad','#c1a0ff'];
-let space={nodes:[],edges:[],projection:null},selectedNode=null,selectedArc=null,plotInitialized=false;
-async function fetchJSON(url,opts){const r=await fetch(url,opts);if(!r.ok)throw new Error(`${url} → ${r.status}`);return r.json()}
-function colorFor(value){const values=[...new Set(space.nodes.map(n=>n.change_pattern||'unclassified'))].sort();return COLORS[Math.max(0,values.indexOf(value||'unclassified'))%COLORS.length]}
-function nodeById(id){return space.nodes.find(n=>n.id===id)}
-function visibleNodes(){const pattern=$('filter-pattern').value,scale=$('filter-scale').value,domain=$('filter-domain').value,scope=$('filter-scope').value;return space.nodes.filter(n=>(!pattern||n.change_pattern===pattern)&&(!scale||n.situation_scale===scale)&&(!domain||(n.domains||[]).includes(domain))&&(!scope||(n.scope_path||[]).includes(scope)))}
-function fillFilters(){const fill=(id,values,label)=>{const el=$(id),current=el.value;el.innerHTML=`<option value="">${label}</option>`+values.filter(Boolean).sort().map(v=>`<option value="${esc(v)}">${esc(v.replaceAll('_',' '))}</option>`).join('');el.value=current};fill('filter-pattern',[...new Set(space.nodes.map(n=>n.change_pattern))],'All patterns');fill('filter-scale',[...new Set(space.nodes.map(n=>n.situation_scale))],'All scales');fill('filter-domain',[...new Set(space.nodes.flatMap(n=>n.domains||[]))],'All domains');fill('filter-scope',[...new Set(space.nodes.flatMap(n=>n.scope_path||[]))],'All scopes')}
-function edgeVisible(e,ids){if(!ids.has(e.source)||!ids.has(e.target))return false;if(e.kind==='arc_sequence'||e.kind==='scope_sequence')return $('show-trajectories').checked;if(e.kind==='structural_neighbor')return $('show-neighbors').checked&&(selectedNode?e.source===selectedNode||e.target===selectedNode:true);return $('show-causal').checked}
-function edgeTrace(edges,kind,color,dash,width){const x=[],y=[],z=[],text=[];for(const e of edges){const a=nodeById(e.source),b=nodeById(e.target);if(!a||!b)continue;x.push(a.x,b.x,null);y.push(a.y,b.y,null);z.push(a.z,b.z,null);text.push('',e.explanation?.summary||kind,'')}return {type:'scatter3d',mode:'lines',x,y,z,text,hoverinfo:'text',name:kind,line:{color,width,dash},showlegend:false}}
-function renderPlot(reset=false){const nodes=visibleNodes(),ids=new Set(nodes.map(n=>n.id));$('space-count').textContent=`${nodes.length} episodes · ${space.edges.filter(e=>edgeVisible(e,ids)).length} visible links`;$('plot-empty').hidden=nodes.length>0;if(!nodes.length){Plotly.purge('arc-plot');return}
- const groups={};nodes.forEach(n=>(groups[n.change_pattern||'unclassified']??=[]).push(n));const traces=[];
- const edges=space.edges.filter(e=>edgeVisible(e,ids));
- const pending=e=>e.review_status==='pending', inferred=e=>e.link_status==='inferred';
- traces.push(edgeTrace(edges.filter(e=>e.kind==='structural_neighbor'),'structural neighbors','#46566b','dot',1));
- traces.push(edgeTrace(edges.filter(e=>e.kind==='scope_sequence'),'focal-scope sequence','#54d6d2','solid',3));
- traces.push(edgeTrace(edges.filter(e=>e.kind==='arc_sequence'&&!inferred(e)&&!pending(e)),'attested arc · approved','#7aa2ff','solid',4));
- traces.push(edgeTrace(edges.filter(e=>e.kind==='arc_sequence'&&!inferred(e)&&pending(e)),'attested arc · pending','#7aa2ff','dot',3));
- traces.push(edgeTrace(edges.filter(e=>e.kind==='arc_sequence'&&inferred(e)),'inferred arc','#b794f6','dash',3));
- traces.push(edgeTrace(edges.filter(e=>e.kind==='causes'&&!pending(e)),'causal · approved','#e7ba62','solid',3));
- traces.push(edgeTrace(edges.filter(e=>e.kind==='causes'&&pending(e)),'causal · pending','#e7ba62','dot',2));
- traces.push(edgeTrace(edges.filter(e=>e.kind==='precedes'&&!pending(e)),'temporal · approved','#54d6d2','solid',2));
- traces.push(edgeTrace(edges.filter(e=>e.kind==='precedes'&&pending(e)),'temporal · pending','#54d6d2','dot',2));
- traces.push(edgeTrace(edges.filter(e=>e.kind==='same_event_as'&&!pending(e)),'same event · approved','#65d391','solid',3));
- traces.push(edgeTrace(edges.filter(e=>e.kind==='same_event_as'&&pending(e)),'same event · pending','#65d391','dot',2));
- traces.push(edgeTrace(edges.filter(e=>!['structural_neighbor','scope_sequence','arc_sequence','causes','precedes','same_event_as'].includes(e.kind)),'other evidence','#8894a6','dot',2));
- for(const [pattern,items] of Object.entries(groups)){traces.push({type:'scatter3d',mode:'markers',name:pattern.replaceAll('_',' '),x:items.map(n=>n.x),y:items.map(n=>n.y),z:items.map(n=>n.z),customdata:items.map(n=>n.id),text:items.map(n=>`<b>${esc(n.title)}</b><br>${esc((n.change_pattern||'unclassified').replaceAll('_',' '))} · ${(n.pattern_confidence*100).toFixed(0)}%<br>${esc(n.scope_name||n.scope_id||'unscoped')} · ${esc(n.start_date?.slice(0,10)||'undated')}`),hovertemplate:'%{text}<extra></extra>',marker:{size:items.map(n=>selectedNode===n.id?12:Math.max(5,6+n.pattern_confidence*4)),color:colorFor(pattern),opacity:items.map(n=>selectedNode&&!isConnected(n.id,selectedNode)?.28:.92),line:{color:'#e8eef8',width:items.map(n=>selectedNode===n.id?2:0)}}})}
- const layout={paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',margin:{l:0,r:0,t:0,b:0},font:{color:'#9aa6b7',family:'Inter,system-ui'},legend:{x:.02,y:.02,bgcolor:'rgba(8,11,16,.7)',bordercolor:'#222c39',borderwidth:1,font:{size:10}},scene:{bgcolor:'rgba(0,0,0,0)',xaxis:axis(),yaxis:axis(),zaxis:axis(),camera:reset?{eye:{x:1.45,y:1.45,z:1.1}}:undefined},uirevision:reset?Date.now():'arc-space'};
- Plotly.react('arc-plot',traces,layout,{responsive:true,displaylogo:false,modeBarButtonsToRemove:['toImage','sendDataToCloud']});if(!plotInitialized){$('arc-plot').on('plotly_click',ev=>{const id=ev.points?.[0]?.customdata;if(id)selectNode(id)});plotInitialized=true}}
-function axis(){return {title:'',showgrid:true,gridcolor:'#1b2430',zeroline:false,showticklabels:false,showspikes:false}}
-function isConnected(a,b){return a===b||space.edges.some(e=>(e.source===a&&e.target===b)||(e.source===b&&e.target===a))}
-function selectNode(id){selectedNode=id;const n=nodeById(id);if(!n)return;renderInspector(n);renderTimeline();renderPlot()}
-function renderConfiguration(n){const labels={capacity:'capacity',cohesion:'cohesion',pressure:'pressure',legitimacy:'legitimacy',adaptability:'adaptability',agency:'agency'};return Object.entries(labels).map(([key,label])=>{const value=n.configuration?.[key];if(value==null)return '';const width=Math.max(0,Math.min(100,(Number(value)+1)*50));return `<div class="axis-row"><span>${label}</span><div class="axis-track"><div class="axis-fill" style="width:${width}%"></div></div><b>${Number(value).toFixed(1)}</b></div>`}).join('')}
-function renderInspector(n){const related=space.edges.filter(e=>e.kind==='structural_neighbor'&&(e.source===n.id||e.target===n.id)).sort((a,b)=>(b.structural_similarity||0)-(a.structural_similarity||0));const arcs=(n.arc_instances||[]).map(a=>`<div class="metric"><strong>${esc(a.name)}</strong><span>${esc(a.link_status)} · review ${esc(a.review_status)}</span></div>`).join('');const scopePath=(n.scope_path||[]).map(s=>`<span>${esc(s)}</span>`).join('');const legacy=n.arc_type?`<dt>Legacy reading</dt><dd>${esc(n.arc_type.replaceAll('_',' '))} · ${esc((n.phase||'phase unknown').replaceAll('_',' '))} · ${(n.confidence*100).toFixed(0)}%</dd>`:'';$('inspector').innerHTML=`<div class="eyebrow">Episode evidence</div><h3>${esc(n.title)}</h3><div class="muted">${esc(n.start_date?.slice(0,10)||'Undated')} · ${esc(n.scope_kind||'scope unknown')}</div><div class="scope-path">${scopePath||esc(n.location||'Unscoped')}</div><div class="chips"><span class="chip phase">${esc((n.change_pattern||'unclassified').replaceAll('_',' '))}</span><span class="chip">${esc((n.situation_scale||'scale unknown').replaceAll('_',' '))}</span>${(n.domains||[]).map(d=>`<span class="chip">${esc(d.replaceAll('_',' '))}</span>`).join('')}</div><p>${esc(n.summary)}</p>${n.scope_notes?`<p class="scope-note"><b>Scope boundary:</b> ${esc(n.scope_notes)}</p>`:''}<div class="eyebrow">Situation configuration</div><div class="axes">${renderConfiguration(n)||'<span class="muted">No supported axis estimates.</span>'}</div><div class="chips">${(n.mechanism_families||[]).map(m=>`<span class="chip">${esc(m.replaceAll('_',' '))}</span>`).join('')}</div><dl class="kv"><dt>Pattern confidence</dt><dd>${(n.pattern_confidence*100).toFixed(0)}% · ${esc(n.classification_state)}</dd>${legacy}<dt>Scope evidence</dt><dd>${esc(n.scope_evidence||'not recorded')}</dd><dt>Pattern rationale</dt><dd>${esc(n.pattern_rationale||'not recorded')}</dd><dt>Source chunks</dt><dd>${n.source_chunks.length?n.source_chunks.map(esc).join(', '):'not recorded'}</dd></dl><div class="eyebrow">Composed membership</div>${arcs||'<p class="muted">No legacy arc membership; focal-scope sequence remains visible.</p>'}<div class="eyebrow" style="margin-top:16px">Why nearby?</div>${related.length?related.slice(0,6).map(e=>{const other=nodeById(e.source===n.id?e.target:e.source);return `<button class="neighbor" onclick="selectNode('${other.id}')"><b>${esc(other.title)}</b><small>structural ${(e.structural_similarity*100).toFixed(1)}%${e.surface_similarity!=null?` · surface ${(e.surface_similarity*100).toFixed(1)}%`:''}</small><small>${esc(e.explanation?.summary||'')}</small></button>`}).join(''):'<p class="muted">No neighbors in the current view.</p>'}`}
-function renderTimeline(){let nodes=visibleNodes();let title='Chronological observations';if(selectedArc){nodes=nodes.filter(n=>n.arc_instances.some(a=>a.id===selectedArc));const arc=space.nodes.flatMap(n=>n.arc_instances).find(a=>a.id===selectedArc);title=arc?.name||'Selected arc'}nodes.sort((a,b)=>(a.start_date||'9999').localeCompare(b.start_date||'9999'));const total=nodes.length;if(!selectedArc&&nodes.length>80)nodes=nodes.slice(0,80);$('timeline-title').textContent=title+(total>nodes.length?` · first ${nodes.length} of ${total}`:'');$('timeline').innerHTML=nodes.length?nodes.map(n=>`<div class="beat ${n.id===selectedNode?'selected':''}" onclick="selectNode('${n.id}')"><div class="date">${esc(n.start_date?.slice(0,10)||'undated')}</div><div class="phase">${esc((n.change_pattern||'pattern unknown').replaceAll('_',' '))}</div><strong>${esc(n.title)}</strong><span class="muted">${esc(n.scope_name||n.scope_id||n.situation_scale||'unscoped')}</span></div>`).join(''):'<div class="empty">No episodes match the filters.</div>'}
-function renderHealth(h){$('stat-episodes').textContent=h.episodes;$('stat-instances').textContent=h.arc_instances;$('stat-reviews').textContent=h.pending_reviews;$('stat-updated').textContent=new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}
-function renderQueue(docs){$('queue').innerHTML=docs.length?`<table><tr><th>file</th><th>status</th><th>progress</th><th></th></tr>${docs.map(d=>`<tr><td>${esc(d.filename)}</td><td><span class="badge ${esc(d.status)}">${esc(d.status)}</span></td><td class="muted">${d.status==='processing'&&d.chunks_created?`<progress max="${d.chunks_created}" value="${d.chunks_processed}"></progress> ${d.chunks_processed}/${d.chunks_created}`:`${d.chunks_created} ch · ${d.episodes_created} ep`}</td><td>${d.status==='failed'||(d.status==='completed'&&!d.extraction_ran)?`<button class="action" onclick="retryDoc('${d.id}')">retry</button>`:''}</td></tr>`).join('')}</table>`:'<div class="empty">Nothing processed yet.</div>'}
-function renderArcs(arcs){$('arcs').innerHTML=arcs.length?arcs.map(a=>{const phases=a.expected_phases.length?a.expected_phases:[...new Set(a.episodes.map(e=>e.phase).filter(Boolean))];return `<div class="arc-list-item"><div class="arc-name"><b>${esc(a.name)}</b><span class="muted">${esc(a.scope_id||'unscoped')}</span></div><div class="lane">${phases.map(p=>`<div class="phase ${a.covered_phases.includes(p)?'covered':''}">${esc(p.replaceAll('_',' '))}</div>`).join('')}</div><div class="eps">${a.episodes.map(e=>`● ${esc(e.title)}`).join(' &nbsp; ')}</div></div>`}).join(''):'<div class="empty">No arc instances yet.</div>'}
-function renderReview(q){const actions=(kind,id)=>`<button class="action" onclick="review('${kind}','${id}','approved')">approve</button> <button class="action" onclick="review('${kind}','${id}','rejected')">reject</button>`;const rows=[...q.memberships.map(m=>`<tr><td>membership</td><td>${esc(m.episode)} → ${esc(m.cycle)}</td><td>${actions('membership',m.id)}</td></tr>`),...q.links.map(l=>`<tr><td>${esc(l.edge_kind)}</td><td>${esc(l.source)} → ${esc(l.target)}</td><td>${actions('link',l.id)}</td></tr>`)];$('review').innerHTML=rows.length?`<table><tr><th>kind</th><th>proposal</th><th></th></tr>${rows.join('')}</table>`:'<div class="empty">Nothing awaiting review.</div>'}
-async function retryDoc(id){await fetchJSON(`/api/documents/${id}/retry`,{method:'POST'});refreshOperations()}async function review(kind,id,decision){await fetchJSON(`/api/review/${kind}/${id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({decision})});refreshOperations()}
-async function refreshSpace(){try{space=await fetchJSON(`/api/arc-space?k=${$('filter-k').value}`);fillFilters();$('projection-meta').textContent=`PCA · ${space.nodes.length} nodes · variance ${space.projection.explained_variance.map(v=>(v*100).toFixed(0)+'%').join(' / ')}`;renderPlot(true);renderTimeline();if(selectedNode&&nodeById(selectedNode))renderInspector(nodeById(selectedNode))}catch(e){$('projection-meta').textContent='Arc Space failed: '+e.message}}
-async function refreshOperations(){try{const [h,d,a,q]=await Promise.all([fetchJSON('/api/health'),fetchJSON('/api/documents'),fetchJSON('/api/arc-instances'),fetchJSON('/api/review-queue')]);renderHealth(h);renderQueue(d);renderArcs(a);renderReview(q)}catch(e){$('stat-updated').textContent='error'}}
-document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.nav button').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));$('tab-'+b.dataset.tab).classList.add('active');if(b.dataset.tab==='arc-space')setTimeout(()=>Plotly.Plots.resize('arc-plot'),20)});['filter-pattern','filter-scale','filter-domain','filter-scope','show-trajectories','show-causal','show-neighbors'].forEach(id=>$(id).onchange=()=>{renderPlot();renderTimeline()});$('filter-k').onchange=refreshSpace;$('reset-view').onclick=()=>{selectedNode=null;selectedArc=null;$('inspector').innerHTML='<div class="eyebrow">Evidence inspector</div><h3>Select an episode</h3><p class="muted">Click a node to inspect why it belongs and what it resembles.</p>';renderPlot(true);renderTimeline()};
-refreshOperations();refreshSpace();setInterval(refreshOperations,5000);
+const $ = id => document.getElementById(id);
+const esc = value => String(value == null ? "" : value).replace(/[&<>"']/g, char => ({
+  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+})[char]);
+const compact = (value, length = 34) => {
+  const text = String(value || "Untitled");
+  return text.length > length ? text.slice(0, length - 1) + "…" : text;
+};
+const PATTERNS = {
+  emergence_and_gathering:{label:"Gathering",color:"#5c83d9",family:"gathering"},
+  expansion_and_consolidation:{label:"Expansion",color:"#4bc7c4",family:"expansion"},
+  tension_and_contestation:{label:"Tension",color:"#e4b65f",family:"tension"},
+  saturation_and_overreach:{label:"Overreach",color:"#ee865e",family:"overreach"},
+  fragmentation_and_release:{label:"Fragmentation",color:"#d66591",family:"fragmentation"},
+  succession_and_transfer:{label:"Transfer",color:"#8e77dd",family:"renewal"},
+  turning_and_reorientation:{label:"Reorientation",color:"#a77bf2",family:"renewal"},
+  renewal_and_integration:{label:"Renewal",color:"#65c98f",family:"renewal"},
+  retreat_and_preservation:{label:"Retreat",color:"#7f8ba0",family:"fragmentation"},
+  unclassified:{label:"Unclassified",color:"#657186",family:"tension"}
+};
+const PHASES = [
+  {id:"gathering",label:"Gathering",caption:"Seeds and early organization",color:"#5c83d9"},
+  {id:"expansion",label:"Expansion",caption:"Capacity and influence grow",color:"#4bc7c4"},
+  {id:"tension",label:"Tension",caption:"Rising conflict and pressure",color:"#e4b65f"},
+  {id:"overreach",label:"Overreach",caption:"Limits and strain become visible",color:"#ee865e"},
+  {id:"fragmentation",label:"Fragmentation",caption:"Splits, retreat, or release",color:"#d66591"},
+  {id:"renewal",label:"Renewal",caption:"Transfer, adaptation, integration",color:"#65c98f"}
+];
+const FACETS = [
+  {id:"civilization",label:"Civilization",caption:"Societies & polities",icon:"ri-government-line",color:"#668ff4"},
+  {id:"groups",label:"Groups & parties",caption:"Factions & movements",icon:"ri-team-line",color:"#a77bf2"},
+  {id:"institutions",label:"Institutions",caption:"Systems & organizations",icon:"ri-building-4-line",color:"#4bc7c4"},
+  {id:"ideas",label:"Ideas & culture",caption:"Beliefs & narratives",icon:"ri-lightbulb-flash-line",color:"#e4b65f"},
+  {id:"people",label:"People",caption:"Leaders & thinkers",icon:"ri-user-star-line",color:"#d66591"}
+];
+const FORMATION_MIN_EPISODES = 3;
+const FORMATION_MIN_PHASES = 2;
+const state = {
+  corpus:{nodes:[],total:0,truncated:false},space:null,health:null,arcs:[],documents:[],
+  reviews:{memberships:[],links:[]},activeTab:"river",selectedId:null,compare:false,
+  visibleFacets:new Set(FACETS.map(facet => facet.id)),arcPageSize:30,storyFocusOnly:false
+};
+function patternMeta(node) {
+  return PATTERNS[node && node.change_pattern || "unclassified"] || PATTERNS.unclassified;
+}
+function yearOf(node) {
+  return node && node.start_year != null ? Number(node.start_year) : null;
+}
+function yearLabel(year) {
+  if (year == null) return "Undated";
+  return year < 0 ? Math.abs(year) + " BCE" : year + " CE";
+}
+function dateLabel(node) {
+  if (!node) return "Undated";
+  if (node.start_date) return node.start_date.slice(0,10);
+  return yearLabel(yearOf(node));
+}
+function facetFor(node) {
+  const kind = String(node && node.scope_kind || "").toLowerCase();
+  if (kind === "person" || kind === "personal") return "people";
+  if (kind === "institution" || kind === "system" || kind === "organization") return "institutions";
+  if (kind === "idea" || kind === "discourse") return "ideas";
+  if (kind === "group" || kind === "faction" || kind === "movement" || kind === "dyad" || kind === "party") return "groups";
+  return "civilization";
+}
+function formationForNodes(nodes) {
+  const phases = new Set(nodes.map(node => patternMeta(node).family).filter(Boolean));
+  return {
+    status:nodes.length >= FORMATION_MIN_EPISODES && phases.size >= FORMATION_MIN_PHASES ? "formed" : "candidate",
+    episodeCount:nodes.length,
+    phaseCount:phases.size
+  };
+}
+function preferredArc(node) {
+  const arcs = node && node.arc_instances || [];
+  return arcs.find(arc => arc.formation_status === "formed") || arcs[0] || null;
+}
+function nodeById(id) {
+  return state.corpus.nodes.find(node => node.id === id) || (state.space && state.space.nodes.find(node => node.id === id));
+}
+function selectedNode() {
+  return nodeById(state.selectedId);
+}
+function relationIds(node, candidates) {
+  if (!node) return new Set();
+  const arcs = new Set((node.arc_instances || []).filter(arc => arc.formation_status === "formed").map(arc => arc.id));
+  const mechanisms = new Set(node.mechanism_families || []);
+  const nodeContext = new Set((node.scope_path || []).slice(0,-1));
+  return new Set(candidates.filter(other => {
+    if (other.id === node.id) return true;
+    if (arcs.size && (other.arc_instances || []).some(arc => arcs.has(arc.id))) return true;
+    const yearDistance = Math.abs((yearOf(other) || 0) - (yearOf(node) || 0));
+    const sharedMechanisms = (other.mechanism_families || []).filter(mechanism => mechanisms.has(mechanism)).length;
+    const sharedContext = (other.scope_path || []).slice(0,-1).some(scope => nodeContext.has(scope));
+    const sameSubject = Boolean(node.scope_name && other.scope_name === node.scope_name);
+    const sameContainer = Boolean(node.parent_scope_name && other.parent_scope_name === node.parent_scope_name);
+    return (sharedContext && sharedMechanisms >= 1 && yearDistance <= 40) || (sameSubject && yearDistance <= 80) || (sameContainer && yearDistance <= 20);
+  }).map(other => other.id));
+}
+function currentFilters() {
+  return {
+    scope:$("filter-scope").value,compare:state.compare ? $("filter-compare").value : "",
+    scale:$("filter-scale").value,domain:$("filter-domain").value,pattern:$("filter-pattern").value,
+    start:Number($("filter-start").value),end:Number($("filter-end").value)
+  };
+}
+function filterNodes(nodes, includeFacetVisibility = false) {
+  const filters = currentFilters();
+  return nodes.filter(node => {
+    const path = node.scope_path || [];
+    const scopeMatch = !filters.scope || path.includes(filters.scope);
+    const compareMatch = filters.compare && path.includes(filters.compare);
+    const year = yearOf(node);
+    return (scopeMatch || compareMatch)
+      && (!filters.scale || node.situation_scale === filters.scale)
+      && (!filters.domain || (node.domains || []).includes(filters.domain))
+      && (!filters.pattern || node.change_pattern === filters.pattern)
+      && (year == null || (!Number.isFinite(filters.start) || year >= filters.start))
+      && (year == null || (!Number.isFinite(filters.end) || year <= filters.end))
+      && (!includeFacetVisibility || state.visibleFacets.has(facetFor(node)));
+  });
+}
+function visibleCorpusNodes(includeFacetVisibility = false) {
+  return filterNodes(state.corpus.nodes, includeFacetVisibility);
+}
+function chronological(nodes) {
+  return [...nodes].sort((a,b) => {
+    const ay = yearOf(a), by = yearOf(b);
+    if (ay == null && by == null) return a.title.localeCompare(b.title);
+    if (ay == null) return 1;if (by == null) return -1;
+    return ay - by || a.title.localeCompare(b.title);
+  });
+}
+function balancedSample(nodes, limit) {
+  if (nodes.length <= limit) return nodes;
+  const step = (nodes.length - 1) / (limit - 1);
+  return Array.from({length:limit}, (_,index) => nodes[Math.round(index * step)]);
+}
+function fillSelect(id, values, firstLabel) {
+  const element = $(id), current = element.value;
+  element.innerHTML = '<option value="">' + esc(firstLabel) + '</option>' + values.map(value =>
+    '<option value="' + esc(value) + '">' + esc(String(value).replaceAll("_"," ")) + '</option>'
+  ).join("");
+  if (values.includes(current)) element.value = current;
+}
+function updateScopeYears() {
+  const scope = $("filter-scope").value;
+  const years = state.corpus.nodes.filter(node => !scope || (node.scope_path || []).includes(scope)).map(yearOf).filter(year => year != null);
+  if (!years.length) return;
+  $("filter-start").value = Math.min(...years);$("filter-end").value = Math.max(...years);
+}
+function populateFilters() {
+  const nodes = state.corpus.nodes;
+  const scopes = [...new Set(nodes.flatMap(node => node.scope_path || []))].filter(Boolean).sort((a,b) => a.localeCompare(b));
+  fillSelect("filter-scope",scopes,"All scopes");fillSelect("filter-compare",scopes,"Choose scope");
+  fillSelect("filter-scale",[...new Set(nodes.map(node => node.situation_scale).filter(Boolean))].sort(),"All scales");
+  fillSelect("filter-domain",[...new Set(nodes.flatMap(node => node.domains || []))].sort(),"All domains");
+  fillSelect("filter-pattern",[...new Set(nodes.map(node => node.change_pattern).filter(Boolean))].sort(),"All patterns");
+  if (scopes.includes("China")) $("filter-scope").value = "China";
+  updateScopeYears();
+  const initial = chronological(visibleCorpusNodes()).filter(node => yearOf(node) != null);
+  if (initial.length) state.selectedId = initial.reduce((best,node) => Math.abs(yearOf(node) - 1949) < Math.abs(yearOf(best) - 1949) ? node : best,initial[0]).id;
+}
+function renderHealth(health) {
+  state.health = health;
+  $("stat-episodes").textContent = Number(health.episodes || 0).toLocaleString();
+  $("stat-instances").textContent = Number(health.formed_arcs || 0).toLocaleString();
+  $("stat-candidates").textContent = Number(health.arc_candidates || 0).toLocaleString();
+  $("stat-reviews").textContent = Number(health.pending_reviews || 0).toLocaleString();
+  $("stat-updated").textContent = new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+  renderQuality(health);
+}
+function renderQuality(health) {
+  const element = $("quality");if (!element) return;
+  const quality = health.quality || {}, total = Number(health.episodes || 0), arcs = Number(health.arc_instances || 0);
+  const pct = (value, denominator) => denominator ? Math.round(Number(value || 0) / denominator * 100) + "%" : "0%";
+  element.innerHTML = '<div class="quality-grid">'
+    + '<div class="quality-metric"><strong>' + pct(health.formed_arcs,arcs) + '</strong><span>arc candidates formed</span></div>'
+    + '<div class="quality-metric"><strong>' + pct(quality.dated_episodes,total) + '</strong><span>episodes dated</span></div>'
+    + '<div class="quality-metric"><strong>' + pct(quality.source_dated_episodes,total) + '</strong><span>source dates known</span></div>'
+    + '<div class="quality-metric"><strong>' + pct(quality.scope_resolved_episodes,total) + '</strong><span>canonical scopes</span></div>'
+    + '<div class="quality-metric"><strong>' + pct(quality.source_backed_episodes,total) + '</strong><span>source-backed spans</span></div>'
+    + '<div class="quality-metric"><strong>' + Number(quality.episode_links || 0).toLocaleString() + '</strong><span>evidence links</span></div>'
+    + '<div class="quality-metric"><strong>' + Number(quality.episodes_since_1990 || 0).toLocaleString() + '</strong><span>episodes since 1990</span></div></div>'
+    + '<p class="quality-note">' + Number(quality.undated_episodes || 0).toLocaleString() + ' undated · ' + Number(quality.scope_unresolved_episodes || 0).toLocaleString() + ' unresolved scopes · ' + Number(quality.unphased_episodes || 0).toLocaleString() + ' unphased · ' + Number(quality.extraction_audit_records || 0).toLocaleString() + ' extraction audit records · ' + Number(health.pending_reviews || 0).toLocaleString() + ' claims await review.</p>';
+}
+function renderSelectionMeta() {
+  const count = visibleCorpusNodes().length, selected = selectedNode();
+  $("selection-meta").textContent = count.toLocaleString() + " episodes" + (selected ? " · selected " + compact(selected.title,28) : "");
+}
+function renderPhaseLegend() {
+  $("phase-legend").innerHTML = Object.entries(PATTERNS).filter(([key]) => key !== "unclassified").map(([,meta]) =>
+    '<span class="legend-item"><span class="swatch" style="--swatch:' + meta.color + '"></span>' + esc(meta.label) + '</span>'
+  ).join("");
+}
+function inspectorMarkup(node, compactMode = false) {
+  if (!node) return '<div class="empty-state"><div class="eyebrow">Evidence inspector</div><h2>Select an episode</h2><p class="muted">Choose an episode in any view to inspect its classification, mechanisms, scope, and source provenance.</p></div>';
+  const meta = patternMeta(node), confidence = Math.round(Number(node.pattern_confidence || node.confidence || 0) * 100);
+  const scope = (node.scope_path || []).join(" › ") || node.location || "Unscoped";
+  const mechanisms = (node.mechanism_families || node.mechanisms || []).slice(0,6);
+  const related = relationIds(node,state.corpus.nodes).size - 1;
+  const arc = preferredArc(node), arcStatus = arc && arc.formation_status || "candidate";
+  const arcChip = '<span class="chip ' + arcStatus + '">' + (arc ? arcStatus + " arc" : "candidate observation") + '</span>';
+  const sourceDate = node.source_published_at ? node.source_published_at.slice(0,10) : "Missing";
+  if (compactMode) {
+    return '<div><div class="eyebrow">Episode evidence</div><h2>' + esc(node.title) + '</h2><div class="inspector-date">' + esc(dateLabel(node)) + ' · ' + esc(scope) + '</div></div>'
+      + '<div class="inspector-section"><h3>Synopsis</h3><p>' + esc(node.summary || "No synopsis recorded.") + '</p><div class="chips">' + mechanisms.map(item => '<span class="chip">' + esc(item.replaceAll("_"," ")) + '</span>').join("") + '</div></div>'
+      + '<div class="inspector-section"><h3>Classification</h3><div class="chips"><span class="chip phase" style="--phase:' + meta.color + '">' + esc(meta.label) + '</span>' + arcChip + '</div><p>' + confidence + '% model confidence · ' + related + ' related episodes · source date ' + esc(sourceDate) + '</p></div>';
+  }
+  return '<div class="inspector-nav"><div class="eyebrow">Episode evidence</div><div><button class="icon-button" data-selection-step="-1" aria-label="Previous episode"><i class="ri-arrow-left-s-line"></i></button> <button class="icon-button" data-selection-step="1" aria-label="Next episode"><i class="ri-arrow-right-s-line"></i></button></div></div>'
+    + '<h2>' + esc(node.title) + '</h2><div class="inspector-date">' + esc(dateLabel(node)) + ' · ' + esc(node.scope_kind || node.situation_scale || "scope unknown") + '</div>'
+    + '<div class="scope-path">' + esc(scope) + '</div><div class="chips"><span class="chip phase" style="--phase:' + meta.color + '">' + esc(meta.label) + '</span>' + arcChip + '<span class="chip">' + esc(String(node.situation_scale || "scale unknown").replaceAll("_"," ")) + '</span>' + (node.domains || []).slice(0,4).map(domain => '<span class="chip">' + esc(domain.replaceAll("_"," ")) + '</span>').join("") + '</div>'
+    + '<div class="confidence"><span>Model fit</span><div class="confidence-track"><span style="width:' + confidence + '%"></span></div><b>' + confidence + '%</b></div>'
+    + '<p class="inspector-summary">' + esc(node.summary || "No synopsis recorded.") + '</p>'
+    + '<div class="inspector-section"><h3>Mechanisms</h3><div class="chips">' + (mechanisms.length ? mechanisms.map(item => '<span class="chip">' + esc(item.replaceAll("_"," ")) + '</span>').join("") : '<span class="muted">No controlled mechanism tags.</span>') + '</div></div>'
+    + '<div class="inspector-section"><h3>Cross-facet context</h3><p>' + related + ' related episodes share an arc, mechanism family, or close scope and time window.</p></div>'
+    + '<div class="inspector-section"><h3>Evidence</h3><p>' + esc(node.scope_evidence || node.pattern_rationale || "No evidence note recorded.") + '</p></div>'
+    + (arc ? '<div class="inspector-section"><h3>Arc evidence</h3><p>' + arc.episode_count + ' episodes · ' + arc.phase_count + ' phases · ' + arc.source_count + ' source work(s) · ' + (arc.human_reviewed ? "human reviewed" : "not fully reviewed") + (arc.formation_gaps && arc.formation_gaps.length ? '. ' + esc(arc.formation_gaps.join("; ")) + '.' : '') + '</p></div>' : '')
+    + '<div class="inspector-section source-row"><span>Source chunks</span><b>' + (node.source_chunks || []).length + '</b></div>'
+    + '<div class="inspector-section source-row"><span>Source publication date</span><b>' + esc(sourceDate) + '</b></div>';
+}
+function renderInspectors() {
+  const node = selectedNode();
+  document.querySelectorAll("[data-inspector]").forEach(element => {element.innerHTML = inspectorMarkup(node,element.classList.contains("story-inspector"));});
+}
+function renderRiver() {
+  const element = $("river-plot");
+  let nodes = chronological(visibleCorpusNodes()).filter(node => yearOf(node) != null);
+  if (!nodes.length) {Plotly.purge(element);element.innerHTML = '<div class="empty">No dated episodes match the filters.</div>';return;}
+  const sampled = [];FACETS.forEach(facet => sampled.push(...balancedSample(nodes.filter(node => facetFor(node) === facet.id),52)));
+  nodes = chronological(sampled);
+  const traces = [], yIndex = {civilization:4,groups:3,institutions:2,ideas:1,people:0}, filters = currentFilters();
+  let formedTracks = 0, candidateTracks = 0;
+  FACETS.forEach(facet => {
+    const laneNodes = nodes.filter(node => facetFor(node) === facet.id);
+    const span = Math.max(1,filters.end - filters.start), binCount = 18, binWidth = span / binCount;
+    const bins = Array.from({length:binCount},(_,index) => ({x:filters.start + (index + .5) * binWidth,count:0}));
+    laneNodes.forEach(node => {
+      const index = Math.max(0,Math.min(binCount - 1,Math.floor((yearOf(node) - filters.start) / binWidth)));
+      bins[index].count += 1;
+    });
+    const maxCount = Math.max(1,...bins.map(bin => bin.count));
+    const widths = bins.map(bin => .025 + bin.count / maxCount * .25), base = yIndex[facet.id];
+    traces.push({type:"scatter",mode:"lines",showlegend:false,hoverinfo:"skip",
+      x:[...bins.map(bin => bin.x),...bins.map(bin => bin.x).reverse()],
+      y:[...widths.map(width => base + width),...widths.map(width => base - width).reverse()],
+      fill:"toself",fillcolor:facet.color + "26",line:{color:facet.color,width:1.2,shape:"spline",smoothing:1.1}});
+    const groups = new Map();
+    laneNodes.forEach(node => {
+      const key = node.scope_name || node.parent_scope_name || facet.label;
+      if (!groups.has(key)) groups.set(key,[]);groups.get(key).push(node);
+    });
+    [...groups.entries()].sort((a,b) => b[1].length - a[1].length).slice(0,7).forEach(([name,items],track) => {
+      const ordered = chronological(items), offset = (track - 3) * .055, formation = formationForNodes(ordered);
+      if (formation.status === "formed") formedTracks += 1;else candidateTracks += 1;
+      traces.push({type:"scatter",mode:"lines+markers",name,showlegend:false,x:ordered.map(yearOf),y:ordered.map(() => yIndex[facet.id] + offset),
+        customdata:ordered.map(node => node.id),text:ordered.map(node => '<b>' + esc(node.title) + '</b><br>' + esc(dateLabel(node)) + '<br>' + esc(patternMeta(node).label) + '<br>' + esc(name) + '<br>' + formation.status + ' · ' + formation.episodeCount + ' episodes / ' + formation.phaseCount + ' phases'),hovertemplate:"%{text}<extra></extra>",
+        line:{color:facet.color,width:formation.status === "formed" ? 7 : 0,shape:"spline",smoothing:1.1},opacity:formation.status === "formed" ? .62 : .4,
+        marker:{size:ordered.map(node => node.id === state.selectedId ? 15 : 9),color:ordered.map(node => patternMeta(node).color),line:{color:"#eef2f8",width:ordered.map(node => node.id === state.selectedId ? 3 : 0)}}});
+    });
+  });
+  const selected = selectedNode();
+  const shapes = FACETS.map((facet,index) => ({type:"rect",xref:"paper",x0:0,x1:1,y0:index-.43,y1:index+.43,fillcolor:index % 2 ? "rgba(17,25,35,.5)" : "rgba(10,16,23,.35)",line:{width:0},layer:"below"}));
+  if (selected && yearOf(selected) != null && nodes.some(node => node.id === selected.id)) shapes.push({type:"line",x0:yearOf(selected),x1:yearOf(selected),y0:-.5,y1:4.5,line:{color:"#dce6ff",width:1.5}});
+  Plotly.react(element,traces,{paper_bgcolor:"rgba(0,0,0,0)",plot_bgcolor:"rgba(0,0,0,0)",margin:{l:132,r:28,t:26,b:54},font:{family:"Inter,system-ui",color:"#8f9bae",size:11},
+    hoverlabel:{bgcolor:"#111923",bordercolor:"#334258",font:{color:"#eef2f8"}},xaxis:{range:[filters.start,filters.end],gridcolor:"#1c2734",zeroline:false,tickfont:{size:10}},
+    yaxis:{range:[-.52,4.52],tickvals:[4,3,2,1,0],ticktext:FACETS.map(facet => facet.label.toUpperCase()),gridcolor:"#202b39",tickfont:{size:10,color:"#c4cfde"},fixedrange:true},shapes,showlegend:false,uirevision:"river"},
+    {responsive:true,displaylogo:false,modeBarButtonsToRemove:["toImage","sendDataToCloud","lasso2d","select2d"]});
+  bindPlotClick(element);
+  $("river-title").textContent = (filters.scope || "All scopes") + (filters.compare ? " compared with " + filters.compare : "") + " · facet formation";
+  $("river-meta").textContent = formedTracks + " formed trajectories · " + candidateTracks + " candidate subjects · " + nodes.length + " displayed episodes";
+}
+function renderStorySummary(nodes) {
+  const selected = selectedNode() || nodes[0];
+  const selectedArc = preferredArc(selected), selectedArcId = selectedArc && selectedArc.formation_status === "formed" ? selectedArc.id : null;
+  const selectedArcs = new Set(selectedArcId ? [selectedArcId] : []);
+  const arcRelated = selected ? nodes.filter(node => (node.arc_instances || []).some(arc => selectedArcs.has(arc.id))) : [];
+  const related = arcRelated.length > 1 ? arcRelated : selected ? nodes.filter(node => relationIds(selected,nodes).has(node.id)) : nodes;
+  const years = related.map(yearOf).filter(year => year != null);
+  const confidence = related.length ? Math.round(related.reduce((sum,node) => sum + Number(node.pattern_confidence || 0),0) / related.length * 100) : 0;
+  const datedRelated = chronological(related).filter(node => yearOf(node) != null);
+  const latest = datedRelated.at(-1);
+  const title = selectedArc && selectedArc.formation_status === "formed" ? selectedArc.name : selected ? selected.scope_name || selected.title : "No selected subject";
+  const selectedLabel = selectedArc && selectedArc.formation_status === "formed" ? "Selected formed arc" : "Selected subject candidate";
+  $("story-summary").innerHTML = '<div><span class="summary-label">' + selectedLabel + '</span><strong>' + esc(compact(title,68)) + '</strong><span class="muted">' + esc((selected && selected.scope_path || []).join(" › ")) + '</span></div>'
+    + '<div><span class="summary-label">Duration</span><strong>' + (years.length ? yearLabel(Math.min(...years)) + "–" + yearLabel(Math.max(...years)) : "Unknown") + '</strong><span class="muted">' + related.length + ' related episodes</span></div>'
+    + '<div><span class="summary-label">Current phase</span><strong style="color:' + patternMeta(latest).color + '">' + esc(patternMeta(latest).label) + '</strong><span class="muted">' + (latest ? dateLabel(latest) : "No dated evidence") + '</span></div>'
+    + '<div><span class="summary-label">Evidence coverage</span><strong>' + nodes.length + '</strong><span class="muted">matching observations</span></div>'
+    + '<div><span class="summary-label">Model confidence</span><strong>' + confidence + '%</strong><span class="muted">Uncalibrated classifier score</span></div>';
+}
+function renderStoryboard() {
+  let nodes = chronological(visibleCorpusNodes()), selected = selectedNode();
+  if (state.storyFocusOnly && selected) {const related = relationIds(selected,nodes);nodes = nodes.filter(node => related.has(node.id));}
+  renderStorySummary(nodes);
+  let html = '<div class="phase-head"><strong style="color:#8f9bae">Facet / scope</strong><span>Rows reveal cross-facet movement</span></div>';
+  html += PHASES.map(phase => '<div class="phase-head" style="--phase:' + phase.color + '"><strong>' + phase.label + '</strong><span>' + phase.caption + '</span></div>').join("");
+  FACETS.forEach(facet => {
+    html += '<div class="facet-head" style="--facet:' + facet.color + '"><i class="' + facet.icon + '" aria-hidden="true"></i><div><strong>' + facet.label + '</strong><span>' + facet.caption + '</span></div></div>';
+    PHASES.forEach(phase => {
+      const items = nodes.filter(node => facetFor(node) === facet.id && patternMeta(node).family === phase.id);
+      const prioritized = [...items].sort((a,b) => (b.id === state.selectedId) - (a.id === state.selectedId) || Number(b.pattern_confidence || 0) - Number(a.pattern_confidence || 0));
+      html += '<div class="story-cell">' + prioritized.slice(0,1).map(node => '<button class="episode-card ' + (node.id === state.selectedId ? "selected" : "") + '" data-node-id="' + esc(node.id) + '" style="--phase:' + patternMeta(node).color + '"><strong>' + esc(compact(node.title,38)) + '</strong><span>' + esc(dateLabel(node)) + ' · ' + esc(compact(node.scope_name || node.parent_scope_name || "",23)) + '</span></button>').join("")
+        + (items.length > 1 ? '<div class="more-count">+' + (items.length - 1) + ' more observations</div>' : "") + '</div>';
+    });
+  });$("storyboard-grid").innerHTML = html;
+}
+function renderFacetToggles(nodes) {
+  $("facet-tree-title").textContent = $("filter-scope").value || "All scopes";
+  $("facet-toggles").innerHTML = FACETS.map(facet => {
+    const count = nodes.filter(node => facetFor(node) === facet.id).length;
+    return '<label class="facet-toggle" style="--facet:' + facet.color + '"><input type="checkbox" data-facet="' + facet.id + '" ' + (state.visibleFacets.has(facet.id) ? "checked" : "") + '><i class="' + facet.icon + '" aria-hidden="true" style="color:' + facet.color + '"></i><span><strong>' + facet.label + '</strong><small>' + count + ' matching episodes</small></span></label>';
+  }).join("");
+}
+function entityGroups(nodes, facetId, maxGroups = 4) {
+  const grouped = new Map();
+  nodes.filter(node => facetFor(node) === facetId).forEach(node => {const key = node.scope_name || node.parent_scope_name || FACETS.find(facet => facet.id === facetId).label;if (!grouped.has(key)) grouped.set(key,[]);grouped.get(key).push(node);});
+  return [...grouped.entries()].sort((a,b) => b[1].length - a[1].length).slice(0,maxGroups);
+}
+function renderConstellation() {
+  const allNodes = chronological(visibleCorpusNodes(false)).filter(node => yearOf(node) != null);
+  const nodes = allNodes.filter(node => state.visibleFacets.has(facetFor(node)));renderFacetToggles(allNodes);
+  const element = $("constellation-plot");
+  if (!nodes.length) {Plotly.purge(element);element.innerHTML = '<div class="empty">No dated episodes match the visible facets.</div>';return;}
+  const boxes = {civilization:{x0:.04,x1:.96,y0:.79,y1:.96},groups:{x0:.04,x1:.48,y0:.42,y1:.75},institutions:{x0:.52,x1:.96,y0:.42,y1:.75},ideas:{x0:.04,x1:.48,y0:.05,y1:.38},people:{x0:.52,x1:.96,y0:.05,y1:.38}};
+  const shapes = [],annotations = [],traces = [],plotted = new Map();
+  FACETS.filter(facet => state.visibleFacets.has(facet.id)).forEach(facet => {
+    const box = boxes[facet.id];
+    shapes.push({type:"rect",xref:"paper",yref:"paper",x0:box.x0,x1:box.x1,y0:box.y0,y1:box.y1,line:{color:facet.color,width:1.3,dash:"dot"},fillcolor:facet.color + "0B",layer:"below"});
+    annotations.push({xref:"paper",yref:"paper",x:box.x0+.015,y:box.y1-.018,text:"<b>" + facet.label.toUpperCase() + "</b>",showarrow:false,font:{size:10,color:facet.color},xanchor:"left",yanchor:"top"});
+    entityGroups(nodes,facet.id,facet.id === "civilization" ? 5 : 4).forEach(([name,items],groupIndex) => {
+      const sampled = balancedSample(chronological(items),6), formation = formationForNodes(items), xSpan = box.x1 - box.x0, ySpan = box.y1 - box.y0;
+      const xValues = sampled.map((node,index) => box.x0 + .08 * xSpan + (sampled.length === 1 ? .45 : index / (sampled.length - 1) * .82) * xSpan);
+      const y = box.y1 - (.24 + groupIndex * .18) * ySpan;sampled.forEach((node,index) => plotted.set(node.id,{x:xValues[index],y}));
+      traces.push({type:"scatter",mode:"lines+markers",showlegend:false,name,x:xValues,y:sampled.map(() => y),customdata:sampled.map(node => node.id),
+        text:sampled.map(node => '<b>' + esc(node.title) + '</b><br>' + esc(dateLabel(node)) + '<br>' + esc(patternMeta(node).label) + '<br>' + formation.status + ' · ' + formation.episodeCount + ' episodes / ' + formation.phaseCount + ' phases'),hovertemplate:"%{text}<extra></extra>",
+        line:{color:facet.color,width:formation.status === "formed" ? 2 : 0},opacity:formation.status === "formed" ? 1 : .58,marker:{size:sampled.map(node => node.id === state.selectedId ? 15 : 8),color:sampled.map(node => patternMeta(node).color),line:{color:"#eef2f8",width:sampled.map(node => node.id === state.selectedId ? 3 : 0)}}});
+      annotations.push({xref:"paper",yref:"paper",x:box.x0+.025,y:y+.022,text:compact(name,26),showarrow:false,font:{size:9,color:"#cbd5e4"},xanchor:"left",yanchor:"bottom"});
+    });
+  });
+  const selected = selectedNode();
+  if (selected && $("constellation-links").checked) {
+    const related = relationIds(selected,nodes),source = plotted.get(selected.id);
+    if (source) {
+      const linkX = [],linkY = [];
+      [...related].filter(id => id !== selected.id && plotted.has(id)).slice(0,16).forEach(id => {const target = plotted.get(id);linkX.push(source.x,target.x,null);linkY.push(source.y,target.y,null);});
+      traces.unshift({type:"scatter",mode:"lines",x:linkX,y:linkY,showlegend:false,hoverinfo:"skip",line:{color:"#4bc7c4",width:1.6,dash:"dot"},opacity:.8});
+    }
+  }
+  Plotly.react(element,traces,{paper_bgcolor:"rgba(0,0,0,0)",plot_bgcolor:"rgba(0,0,0,0)",margin:{l:8,r:8,t:8,b:8},xaxis:{range:[0,1],visible:false,fixedrange:true},yaxis:{range:[0,1],visible:false,fixedrange:true},
+    shapes,annotations,font:{family:"Inter,system-ui",color:"#8f9bae"},hoverlabel:{bgcolor:"#111923",bordercolor:"#334258",font:{color:"#eef2f8"}},showlegend:false,uirevision:"constellation"},
+    {responsive:true,displaylogo:false,displayModeBar:false});bindPlotClick(element);renderConstellationTimeline(nodes);
+}
+function renderConstellationTimeline(nodes) {
+  const element = $("constellation-timeline-plot"),sample = balancedSample(chronological(nodes),100),selected = selectedNode();
+  const traces = [{type:"scatter",mode:"lines+markers",showlegend:false,x:sample.map(yearOf),y:sample.map(() => 0),customdata:sample.map(node => node.id),
+    text:sample.map(node => '<b>' + esc(node.title) + '</b><br>' + esc(dateLabel(node)) + '<br>' + esc(patternMeta(node).label)),hovertemplate:"%{text}<extra></extra>",
+    line:{color:"#334258",width:2},marker:{size:sample.map(node => node.id === state.selectedId ? 14 : 7),color:sample.map(node => patternMeta(node).color),line:{color:"#eef2f8",width:sample.map(node => node.id === state.selectedId ? 3 : 0)}}}];
+  const shapes = selected && yearOf(selected) != null ? [{type:"line",x0:yearOf(selected),x1:yearOf(selected),y0:-.45,y1:.45,line:{color:"#eef2f8",width:1}}] : [];
+  Plotly.react(element,traces,{paper_bgcolor:"rgba(0,0,0,0)",plot_bgcolor:"rgba(0,0,0,0)",margin:{l:40,r:30,t:8,b:30},xaxis:{gridcolor:"#1c2734",zeroline:false,tickfont:{size:9}},yaxis:{range:[-.5,.5],visible:false,fixedrange:true},
+    shapes,font:{family:"Inter,system-ui",color:"#8f9bae"},hoverlabel:{bgcolor:"#111923",bordercolor:"#334258",font:{color:"#eef2f8"}},uirevision:"constellation-timeline"},
+    {responsive:true,displaylogo:false,displayModeBar:false});bindPlotClick(element);$("constellation-meta").textContent = sample.length + " displayed · " + nodes.length + " matching";
+}
+function bindPlotClick(element) {
+  if (element.dataset.bound === "true") return;
+  element.on("plotly_click",event => {const id = event.points && event.points[0] && event.points[0].customdata;if (id) selectNode(id);});
+  element.dataset.bound = "true";
+}
+async function ensureSimilarity() {
+  if (state.space) return;$("similarity-status").textContent = "Loading structural projection…";
+  try {state.space = await fetchJSON("/api/arc-space?k=3&limit=500");$("similarity-status").textContent = "Loaded. The projection is intentionally capped at 500 episodes; filters apply to the same shared scope.";renderSimilarity();}
+  catch (error) {$("similarity-status").textContent = "Similarity Space failed: " + error.message;}
+}
+function renderSimilarity() {
+  if (!state.space) return;
+  const element = $("similarity-plot"),nodes = filterNodes(state.space.nodes);
+  if (!nodes.length) {Plotly.purge(element);element.innerHTML = '<div class="empty">No projected episodes match the current filters. The chronological views may contain newer unprojected evidence.</div>';$("similarity-meta").textContent = "0 projected episodes";return;}
+  const ids = new Set(nodes.map(node => node.id)),nodeMap = new Map(state.space.nodes.map(node => [node.id,node])),traces = [];
+  if ($("show-trajectories").checked) {
+    const scopeMembers = new Map();
+    state.space.edges.filter(edge => edge.kind === "scope_sequence" && ids.has(edge.source) && ids.has(edge.target)).forEach(edge => {
+      if (!scopeMembers.has(edge.scope_name)) scopeMembers.set(edge.scope_name,new Map());
+      [edge.source,edge.target].forEach(id => {const node = nodeMap.get(id);if (node) scopeMembers.get(edge.scope_name).set(id,node);});
+    });
+    const formedScopes = new Set([...scopeMembers.entries()].filter(([,members]) => formationForNodes([...members.values()]).status === "formed").map(([scope]) => scope));
+    const edges = state.space.edges.filter(edge => ids.has(edge.source) && ids.has(edge.target) && ((edge.kind === "arc_sequence" && edge.formation_status === "formed") || (edge.kind === "scope_sequence" && formedScopes.has(edge.scope_name)))),x = [],y = [],z = [];
+    edges.forEach(edge => {const a = nodeMap.get(edge.source),b = nodeMap.get(edge.target);if (!a || !b) return;x.push(a.x,b.x,null);y.push(a.y,b.y,null);z.push(a.z,b.z,null);});
+    traces.push({type:"scatter3d",mode:"lines",x,y,z,showlegend:false,hoverinfo:"skip",line:{color:"#4bc7c4",width:2},opacity:.45});
+  }
+  if ($("show-neighbors").checked) {
+    const edges = state.space.edges.filter(edge => ids.has(edge.source) && ids.has(edge.target) && edge.kind === "structural_neighbor" && (!state.selectedId || edge.source === state.selectedId || edge.target === state.selectedId)),x = [],y = [],z = [];
+    edges.forEach(edge => {const a = nodeMap.get(edge.source),b = nodeMap.get(edge.target);if (!a || !b) return;x.push(a.x,b.x,null);y.push(a.y,b.y,null);z.push(a.z,b.z,null);});
+    traces.push({type:"scatter3d",mode:"lines",x,y,z,showlegend:false,hoverinfo:"skip",line:{color:"#71819a",width:1,dash:"dot"},opacity:.5});
+  }
+  const groups = {};nodes.forEach(node => {const key = node.change_pattern || "unclassified";if (!groups[key]) groups[key] = [];groups[key].push(node);});
+  Object.entries(groups).forEach(([key,items]) => {
+    const meta = PATTERNS[key] || PATTERNS.unclassified;
+    traces.push({type:"scatter3d",mode:"markers",name:meta.label,x:items.map(node => node.x),y:items.map(node => node.y),z:items.map(node => node.z),customdata:items.map(node => node.id),
+      text:items.map(node => '<b>' + esc(node.title) + '</b><br>' + esc(meta.label) + ' · ' + Math.round(Number(node.pattern_confidence || 0) * 100) + '%<br>' + esc(dateLabel(node))),hovertemplate:"%{text}<extra></extra>",
+      marker:{size:items.map(node => node.id === state.selectedId ? 10 : 5),color:meta.color,opacity:.88,line:{color:"#eef2f8",width:items.map(node => node.id === state.selectedId ? 2 : 0)}}});
+  });
+  Plotly.react(element,traces,{paper_bgcolor:"rgba(0,0,0,0)",plot_bgcolor:"rgba(0,0,0,0)",margin:{l:0,r:0,t:0,b:0},font:{family:"Inter,system-ui",color:"#8f9bae",size:10},
+    legend:{x:.02,y:.02,bgcolor:"rgba(8,11,16,.8)",bordercolor:"#202b39",borderwidth:1,font:{size:9}},scene:{bgcolor:"rgba(0,0,0,0)",xaxis:similarityAxis(),yaxis:similarityAxis(),zaxis:similarityAxis()},uirevision:"similarity"},
+    {responsive:true,displaylogo:false,modeBarButtonsToRemove:["toImage","sendDataToCloud"]});bindPlotClick(element);
+  $("similarity-meta").textContent = nodes.length + " projected episodes · variance " + state.space.projection.explained_variance.map(value => Math.round(value * 100) + "%").join(" / ");
+}
+function similarityAxis() {return {title:"",showgrid:true,gridcolor:"#1c2734",zeroline:false,showticklabels:false,showspikes:false};}
+function renderQueue(documents) {
+  const recent = [...documents].sort((a,b) => String(b.updated_at).localeCompare(String(a.updated_at))).slice(0,16);
+  $("queue").innerHTML = recent.length ? '<table><thead><tr><th>File</th><th>Status</th><th>Output</th><th></th></tr></thead><tbody>' + recent.map(document =>
+    '<tr><td>' + esc(compact(document.filename,28)) + '</td><td><span class="badge ' + esc(document.status) + '">' + esc(document.status) + '</span></td><td class="muted">' + document.chunks_created + ' ch · ' + document.episodes_created + ' ep</td><td>' + ((document.status === "failed" || document.status === "completed" && !document.extraction_ran) ? '<button class="action" data-retry-doc="' + esc(document.id) + '">Retry</button>' : "") + '</td></tr>'
+  ).join("") + '</tbody></table>' : '<div class="empty">No documents processed yet.</div>';
+}
+function renderArcs() {
+  const query = $("arc-search").value.trim().toLowerCase(),formationFilter = $("arc-formation-filter").value;
+  const matches = state.arcs.filter(arc => (formationFilter === "all" || arc.formation_status === formationFilter) && (!query || String(arc.name || "").toLowerCase().includes(query) || String(arc.scope_id || "").toLowerCase().includes(query)));
+  const shown = matches.slice(0,state.arcPageSize);
+  $("arcs").innerHTML = shown.length ? shown.map(arc => {
+    const phases = arc.expected_phases.length ? arc.expected_phases : [...new Set(arc.episodes.map(episode => episode.phase).filter(Boolean))];
+    const sourceLabel = arc.source_count ? arc.source_count + (arc.source_count === 1 ? " source work" : " source works") : "source unknown";
+    const reviewLabel = arc.human_reviewed ? "human reviewed" : arc.pending_count ? arc.pending_count + " pending review" : "not human reviewed";
+    const gaps = arc.formation_gaps && arc.formation_gaps.length ? '<span class="warning">' + esc(arc.formation_gaps.join(" · ")) + '</span>' : '';
+    return '<div class="arc-row ' + esc(arc.formation_status) + '"><div class="arc-row-head"><div class="arc-title"><span class="formation-badge ' + esc(arc.formation_status) + '">' + esc(arc.formation_status) + '</span><b>' + esc(compact(arc.name,72)) + '</b></div><span>' + esc(arc.scope_id || "unscoped") + '</span></div><div class="phase-track">' + phases.map(phase => '<span class="phase-segment ' + (arc.covered_phases.includes(phase) ? "covered" : "") + '" title="' + esc(phase.replaceAll("_"," ")) + '"></span>').join("") + '</div><div class="arc-evidence"><span>' + arc.episode_count + ' episodes / ' + arc.phase_count + ' phases</span><span>' + esc(sourceLabel) + '</span><span>' + esc(reviewLabel) + '</span>' + gaps + '</div></div>';
+  }).join("") : '<div class="empty">No ' + esc(formationFilter === "all" ? "arc classifications" : formationFilter + " arcs") + ' match the search.</div>';
+  $("show-more-arcs").hidden = shown.length >= matches.length;$("show-more-arcs").textContent = "Show " + Math.min(30,matches.length - shown.length) + " more";
+}
+function renderReview(reviews) {
+  const rows = [...reviews.memberships.map(item => ({kind:"membership",id:item.id,label:item.episode + " → " + item.cycle})),...reviews.links.map(item => ({kind:"link",id:item.id,label:item.source + " → " + item.target}))].slice(0,20);
+  $("review").innerHTML = rows.length ? '<table><thead><tr><th>Kind</th><th>Proposal</th><th></th></tr></thead><tbody>' + rows.map(row =>
+    '<tr><td class="muted">' + esc(row.kind) + '</td><td>' + esc(compact(row.label,46)) + '</td><td><div class="review-actions"><button class="action" data-review-kind="' + row.kind + '" data-review-id="' + row.id + '" data-decision="approved">Approve</button><button class="action" data-review-kind="' + row.kind + '" data-review-id="' + row.id + '" data-decision="rejected">Reject</button></div></td></tr>'
+  ).join("") + '</tbody></table>' : '<div class="empty">Nothing awaiting review.</div>';
+}
+async function refreshOperations() {
+  try {const results = await Promise.all([fetchJSON("/api/documents"),fetchJSON("/api/arc-instances?limit=2500"),fetchJSON("/api/review-queue")]);state.documents = results[0];state.arcs = results[1];state.reviews = results[2];renderQueue(state.documents);renderArcs();renderReview(state.reviews);}
+  catch (error) {$("queue").innerHTML = '<div class="empty">Operations failed: ' + esc(error.message) + '</div>';}
+}
+async function fetchJSON(url,options) {const response = await fetch(url,options);if (!response.ok) throw new Error(url + " → " + response.status);return response.json();}
+async function retryDocument(id) {await fetchJSON("/api/documents/" + id + "/retry",{method:"POST"});await refreshOperations();}
+async function reviewClaim(kind,id,decision) {await fetchJSON("/api/review/" + kind + "/" + id,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({decision})});renderHealth(await fetchJSON("/api/health"));await refreshOperations();}
+function selectNode(id) {state.selectedId = id;renderSelectionMeta();renderInspectors();renderActiveView();}
+function stepSelection(direction) {
+  const nodes = chronological(visibleCorpusNodes());if (!nodes.length) return;
+  const index = Math.max(0,nodes.findIndex(node => node.id === state.selectedId)),next = (index + direction + nodes.length) % nodes.length;selectNode(nodes[next].id);
+}
+function renderActiveView() {
+  if (state.activeTab === "river") renderRiver();
+  if (state.activeTab === "storyboard") renderStoryboard();
+  if (state.activeTab === "constellation") renderConstellation();
+  if (state.activeTab === "similarity") renderSimilarity();
+}
+function applyFilters(scopeChanged = false) {
+  if (scopeChanged) updateScopeYears();
+  const nodes = chronological(visibleCorpusNodes());
+  if (state.selectedId && !nodes.some(node => node.id === state.selectedId) && nodes.length) state.selectedId = nodes[0].id;
+  renderSelectionMeta();renderInspectors();renderActiveView();
+}
+function switchTab(tab) {
+  state.activeTab = tab;
+  document.querySelectorAll(".nav button").forEach(button => button.classList.toggle("active",button.dataset.tab === tab));
+  document.querySelectorAll(".tab").forEach(section => section.classList.toggle("active",section.id === "tab-" + tab));
+  $("analysis-controls").hidden = tab === "operations";
+  if (tab === "operations") {if (!state.arcs.length) refreshOperations();return;}
+  if (tab === "similarity") ensureSimilarity();requestAnimationFrame(() => renderActiveView());
+}
+function resetFilters() {
+  ["filter-scale","filter-domain","filter-pattern","filter-compare"].forEach(id => $(id).value = "");
+  $("filter-scope").value = [...$("filter-scope").options].some(option => option.value === "China") ? "China" : "";
+  state.compare = false;$("compare-toggle").setAttribute("aria-pressed","false");$("compare-control").hidden = true;updateScopeYears();applyFilters();
+}
+document.addEventListener("click",event => {
+  const tab = event.target.closest("[data-tab]");if (tab) switchTab(tab.dataset.tab);
+  const episode = event.target.closest("[data-node-id]");if (episode) selectNode(episode.dataset.nodeId);
+  const step = event.target.closest("[data-selection-step]");if (step) stepSelection(Number(step.dataset.selectionStep));
+  const retry = event.target.closest("[data-retry-doc]");if (retry) retryDocument(retry.dataset.retryDoc);
+  const review = event.target.closest("[data-review-id]");if (review) reviewClaim(review.dataset.reviewKind,review.dataset.reviewId,review.dataset.decision);
+});
+["filter-scale","filter-domain","filter-pattern","filter-start","filter-end","filter-compare"].forEach(id => $(id).addEventListener("change",() => applyFilters()));
+$("filter-scope").addEventListener("change",() => applyFilters(true));
+$("compare-toggle").addEventListener("click",() => {state.compare = !state.compare;$("compare-toggle").setAttribute("aria-pressed",String(state.compare));$("compare-control").hidden = !state.compare;if (!state.compare) $("filter-compare").value = "";applyFilters();});
+$("reset-filters").addEventListener("click",resetFilters);$("river-fit").addEventListener("click",() => {updateScopeYears();applyFilters();});
+$("story-focus-only").addEventListener("change",event => {state.storyFocusOnly = event.target.checked;renderStoryboard();renderInspectors();});
+$("constellation-links").addEventListener("change",renderConstellation);
+$("facet-toggles").addEventListener("change",event => {if (!event.target.dataset.facet) return;if (event.target.checked) state.visibleFacets.add(event.target.dataset.facet);else state.visibleFacets.delete(event.target.dataset.facet);renderConstellation();});
+$("show-trajectories").addEventListener("change",renderSimilarity);$("show-neighbors").addEventListener("change",renderSimilarity);
+$("similarity-reset").addEventListener("click",() => {const element = $("similarity-plot");if (element && element.layout) Plotly.relayout(element,{"scene.camera":null});});
+$("arc-search").addEventListener("input",() => {state.arcPageSize = 30;renderArcs();});$("arc-formation-filter").addEventListener("change",() => {state.arcPageSize = 30;renderArcs();});$("show-more-arcs").addEventListener("click",() => {state.arcPageSize += 30;renderArcs();});
+async function initialize() {
+  renderPhaseLegend();
+  try {const results = await Promise.all([fetchJSON("/api/episodes?limit=2500"),fetchJSON("/api/health")]);state.corpus = results[0];renderHealth(results[1]);populateFilters();renderSelectionMeta();renderInspectors();renderRiver();}
+  catch (error) {$("selection-meta").textContent = "Dashboard failed: " + error.message;document.querySelectorAll("[data-inspector]").forEach(element => element.innerHTML = '<div class="empty">Unable to load the historical corpus.</div>');}
+}
+initialize();
+setInterval(async () => {try {renderHealth(await fetchJSON("/api/health"));} catch (error) {}},30000);
 </script>
-</body></html>
+</body>
+</html>

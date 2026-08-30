@@ -4,7 +4,10 @@ import json
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
+import httpx
+import openai
 import pytest
+from tenacity import wait_none
 
 from narrative_engine.extraction.client import (
     ExtractionPipeline,
@@ -26,6 +29,7 @@ class TestLLMConfig:
         assert config.model == "claude-sonnet-5"
         assert config.temperature == 0.0
         assert config.max_tokens == 4000
+        assert config.request_timeout_seconds == 90.0
 
     def test_config_from_env(self, monkeypatch):
         """Test configuration from environment variables."""
@@ -71,7 +75,9 @@ class TestExtractionPipelineConfig:
         assert config.enable_classification is True
         assert config.enable_linking is True
         assert config.segmentation_model == "claude-haiku-4-5"
+        assert config.scope_model == "claude-haiku-4-5"
         assert config.extraction_model == "claude-sonnet-5"
+        assert config.reconciliation_model == "claude-sonnet-5"
 
     def test_pipeline_config_from_env(self, monkeypatch):
         """Test pipeline configuration from environment."""
@@ -86,7 +92,14 @@ class TestExtractionPipelineConfig:
 
     def test_openai_provider_gets_openai_stage_defaults(self, monkeypatch):
         monkeypatch.setenv("NE_LLM_PROVIDER", "openai")
-        for var in ("NE_SEG_MODEL", "NE_EXTRACT_MODEL", "NE_CLASSIFY_MODEL", "NE_LINK_MODEL"):
+        for var in (
+            "NE_SEG_MODEL",
+            "NE_SCOPE_MODEL",
+            "NE_EXTRACT_MODEL",
+            "NE_RECONCILE_MODEL",
+            "NE_CLASSIFY_MODEL",
+            "NE_LINK_MODEL",
+        ):
             monkeypatch.delenv(var, raising=False)
 
         config = ExtractionPipelineConfig.from_env()
@@ -95,7 +108,9 @@ class TestExtractionPipelineConfig:
             not model.startswith("claude-")
             for model in (
                 config.segmentation_model,
+                config.scope_model,
                 config.extraction_model,
+                config.reconciliation_model,
                 config.classification_model,
                 config.linking_model,
             )
@@ -150,6 +165,8 @@ class TestOpenAIClient:
         constructor.assert_called_once_with(
             api_key="venice-test-key",
             base_url="https://api.venice.ai/api/v1",
+            timeout=90.0,
+            max_retries=0,
         )
 
     @pytest.fixture
@@ -184,6 +201,22 @@ class TestOpenAIClient:
         assert result["usage"]["total_tokens"] == 150
 
     @pytest.mark.asyncio
+    async def test_complete_retries_connection_failure(self, mock_openai_response):
+        """A dropped provider connection is retried without failing the chunk."""
+        client = OpenAIClient(LLMConfig(api_key="test-key"))
+        request = httpx.Request("POST", "https://example.test/chat/completions")
+        mock_create = AsyncMock(
+            side_effect=[openai.APIConnectionError(request=request), mock_openai_response]
+        )
+        client.client = MagicMock()
+        client.client.chat.completions.create = mock_create
+
+        result = await client.complete.retry_with(wait=wait_none())(client, "Test prompt")
+
+        assert result["content"] == json.dumps({"result": "test"})
+        assert mock_create.await_count == 2
+
+    @pytest.mark.asyncio
     async def test_complete_forwards_reasoning_effort(self, mock_openai_response):
         """Test forwarding Venice's OpenAI-compatible reasoning extension."""
         config = LLMConfig(api_key="test-key", reasoning_effort="none")
@@ -196,6 +229,28 @@ class TestOpenAIClient:
         await client.complete("Test prompt")
 
         assert mock_create.await_args.kwargs["extra_body"] == {"reasoning_effort": "none"}
+
+    @pytest.mark.asyncio
+    async def test_complete_disables_thinking_explicitly_for_venice(self, mock_openai_response):
+        """Venice receives its provider-specific no-thinking control as well."""
+        config = LLMConfig(
+            api_key="test-key",
+            base_url="https://api.venice.ai/api/v1",
+            reasoning_effort="none",
+        )
+        client = OpenAIClient(config)
+        mock_create = AsyncMock(return_value=mock_openai_response)
+        client.client.chat.completions.create = mock_create
+
+        await client.complete("test prompt")
+
+        assert mock_create.await_args.kwargs["extra_body"] == {
+            "reasoning_effort": "none",
+            "venice_parameters": {
+                "disable_thinking": True,
+                "strip_thinking_response": True,
+            },
+        }
 
     @pytest.mark.asyncio
     async def test_complete_with_json_parsing(self, mock_openai_response):
@@ -275,6 +330,7 @@ class TestExtractionPipeline:
         assert len(result["episodes"]) == 1
         assert result["episodes"][0]["summary"] == "Test episode"
         assert result["episodes"][0]["text"] == "Test text"
+        assert mock_llm_client.complete_with_json.await_args.kwargs["max_tokens"] == 1_000
 
     @pytest.mark.asyncio
     async def test_segmentation_materializes_validated_source_spans(self, mock_llm_client):
@@ -323,6 +379,69 @@ class TestExtractionPipeline:
         assert len(result["episodes"]) == 1
         assert result["episodes"][0]["text"] == source
         assert result["episodes"][0]["segmentation_fallback"] == "unresolved_source_spans"
+
+    @pytest.mark.asyncio
+    async def test_segmentation_recovers_multiple_events_from_ordered_start_quotes(self, mock_llm_client):
+        source = "Preface. Alpha rose to power.\n\nBeta later displaced it."
+        mock_llm_client.complete_with_json.return_value = {
+            "episodes": [
+                {
+                    "number": 1,
+                    "summary": "Alpha rises",
+                    "start_quote": "Alpha rose to power.",
+                    "end_quote": "not an exact ending",
+                },
+                {
+                    "number": 2,
+                    "summary": "Beta displaces Alpha",
+                    "start_quote": "Beta later displaced it.",
+                    "end_quote": "also inaccurate",
+                },
+            ]
+        }
+
+        result = await ExtractionPipeline(client=mock_llm_client).segment(source)
+
+        assert len(result["episodes"]) == 2
+        assert "Alpha rose" in result["episodes"][0]["text"]
+        assert result["episodes"][1]["text"].startswith("Beta later")
+        assert all(
+            episode["boundary_resolution"] == "ordered_starts"
+            for episode in result["episodes"]
+        )
+
+    @pytest.mark.asyncio
+    async def test_segmentation_tolerates_quote_typography_and_whitespace(self, mock_llm_client):
+        source = (
+            "Preface. The leader’s reform—after long debate—began here.\n\n"
+            "The opposition’s counter-movement then displaced it."
+        )
+        mock_llm_client.complete_with_json.return_value = {
+            "episodes": [
+                {
+                    "number": 1,
+                    "summary": "Reform begins",
+                    "start_quote": "The leader's reform after long debate began here",
+                    "end_quote": "inexact ending",
+                },
+                {
+                    "number": 2,
+                    "summary": "Opposition responds",
+                    "start_quote": "The opposition's counter movement then displaced it",
+                    "end_quote": "also inexact",
+                },
+            ]
+        }
+
+        result = await ExtractionPipeline(client=mock_llm_client).segment(source)
+
+        assert len(result["episodes"]) == 2
+        assert "leader’s reform" in result["episodes"][0]["text"]
+        assert result["episodes"][1]["text"].startswith("The opposition’s")
+        assert all(
+            episode["boundary_resolution"] == "ordered_starts"
+            for episode in result["episodes"]
+        )
 
     @pytest.mark.asyncio
     async def test_extraction_stage(self, mock_llm_client):
@@ -459,6 +578,150 @@ class TestExtractionOrchestrator:
         assert result.processing_time_ms > 0
 
     @pytest.mark.asyncio
+    async def test_real_session_persists_passage_and_stage_audit(self, mock_pipeline, db_session):
+        from sqlalchemy import select
+
+        from narrative_engine.storage.orm_models import ExtractionRecordORM, SourcePassageORM
+
+        source = "A reform coalition organized in 1903."
+        mock_pipeline.segment.return_value = {
+            "episodes": [{"number": 1, "summary": "Coalition organizes", "text": source}]
+        }
+        mock_pipeline.extract.return_value = {
+            "title": "Coalition organizes",
+            "summary": "A reform coalition organized.",
+            "actors": [],
+            "setting": {"start_date": "1903"},
+        }
+        mock_pipeline.classify.return_value = {
+            "arc_type": "reform_then_reaction",
+            "arc_phase": "setup",
+            "phase_confidence": 0.8,
+        }
+
+        result = await ExtractionOrchestrator(pipeline=mock_pipeline).process_text(
+            source,
+            "audit-work_0",
+            db_session,
+        )
+
+        records = (await db_session.execute(select(ExtractionRecordORM))).scalars().all()
+        passages = (await db_session.execute(select(SourcePassageORM))).scalars().all()
+        assert result.errors == []
+        assert {record.pipeline_stage for record in records} == {
+            "segmentation",
+            "extraction",
+            "classification",
+        }
+        assert len(passages) == 1
+        assert passages[0].work_id == "audit-work"
+        assert passages[0].text == source
+
+    @pytest.mark.asyncio
+    async def test_document_reconciliation_updates_contextual_phase(self, mock_pipeline, db_session):
+        from narrative_engine.models import Episode
+        from narrative_engine.storage.repositories import EpisodeRepository
+
+        first = Episode(
+            title="Movement organizes",
+            summary="Organizations form.",
+            start_year=1900,
+            scope_id="uk_womens_suffrage_movement",
+            scope_name="Women's Suffrage Movement",
+            scope_confidence=0.9,
+            arc_type="reform_then_reaction",
+            arc_phase="rising_action",
+            phase_confidence=0.7,
+            extracted_from=["reconcile-work_0"],
+        )
+        second = Episode(
+            title="Voting reform enacted",
+            summary="The franchise expands.",
+            start_year=1918,
+            scope_id="uk_womens_suffrage_movement",
+            scope_name="Women's Suffrage Movement",
+            scope_confidence=0.9,
+            arc_type="reform_then_reaction",
+            arc_phase="climax",
+            phase_confidence=0.7,
+            extracted_from=["reconcile-work_1"],
+        )
+        repository = EpisodeRepository(db_session)
+        await repository.create(first)
+        await repository.create(second)
+        mock_pipeline.reconcile_phases.return_value = {
+            "episodes": [
+                {
+                    "episode_id": str(first.id),
+                    "arc_type": "reform_then_reaction",
+                    "arc_phase": "setup",
+                    "confidence": 0.91,
+                    "reason": "Organization precedes escalation.",
+                },
+                {
+                    "episode_id": str(second.id),
+                    "arc_type": "reform_then_reaction",
+                    "arc_phase": "resolution",
+                    "confidence": 0.88,
+                    "reason": "The reform settled the immediate demand.",
+                },
+            ]
+        }
+
+        updated = await ExtractionOrchestrator(pipeline=mock_pipeline).reconcile_document_phases(
+            ["reconcile-work_0", "reconcile-work_1"],
+            db_session,
+        )
+
+        assert {episode.arc_phase.value for episode in updated} == {"setup", "resolution"}
+        assert (await repository.get_by_id(first.id)).arc_phase.value == "setup"
+        assert (await repository.get_by_id(second.id)).arc_phase.value == "resolution"
+
+    @pytest.mark.asyncio
+    async def test_cross_document_linking_creates_reviewable_edge(self, mock_pipeline, db_session):
+        from sqlalchemy import select
+
+        from narrative_engine.models import Episode
+        from narrative_engine.storage.orm_models import EpisodeLinkORM
+        from narrative_engine.storage.repositories import EpisodeRepository
+
+        earlier = Episode(
+            title="Convention adopts reform",
+            summary="The convention adopted a suffrage reform.",
+            start_year=1917,
+            scope_id="uk_womens_suffrage_movement",
+            scope_name="Women's Suffrage Movement",
+            extracted_from=["older-source_2"],
+        )
+        newer = Episode(
+            title="Voting reform enacted",
+            summary="The reform became law in the following year.",
+            start_year=1918,
+            scope_id="uk_womens_suffrage_movement",
+            scope_name="Women's Suffrage Movement",
+            extracted_from=["new-source_0"],
+        )
+        repository = EpisodeRepository(db_session)
+        await repository.create(earlier)
+        await repository.create(newer)
+        mock_pipeline.link.return_value = {
+            "relationship": "same_event",
+            "confidence": 0.87,
+            "reasoning": "Two sources describe the same reform sequence.",
+        }
+
+        linked = await ExtractionOrchestrator(pipeline=mock_pipeline).link_document_candidates(
+            ["new-source_0"],
+            db_session,
+        )
+
+        edges = (await db_session.execute(select(EpisodeLinkORM))).scalars().all()
+        assert linked == 1
+        assert len(edges) == 1
+        assert edges[0].edge_kind == "same_event_as"
+        assert edges[0].review_status == "pending"
+
+    @pytest.mark.asyncio
     async def test_process_text_persists_attested_causal_links(self, mock_pipeline):
         from narrative_engine.storage.orm_models import EpisodeLinkORM
 
@@ -488,7 +751,10 @@ class TestExtractionOrchestrator:
         session.add = MagicMock()
         session.flush = AsyncMock()
 
-        result = await ExtractionOrchestrator(pipeline=mock_pipeline).process_text(source, "chunk", session)
+        result = await ExtractionOrchestrator(
+            pipeline=mock_pipeline,
+            config=ExtractionPipelineConfig(enable_chunk_linking=True),
+        ).process_text(source, "chunk", session)
 
         links = [call.args[0] for call in session.add.call_args_list if isinstance(call.args[0], EpisodeLinkORM)]
         assert result.errors == []
@@ -524,9 +790,17 @@ class TestExtractionOrchestrator:
         session.add = MagicMock()
         session.flush = AsyncMock()
 
-        result = await ExtractionOrchestrator(pipeline=mock_pipeline).process_text(source, "chunk", session)
+        result = await ExtractionOrchestrator(
+            pipeline=mock_pipeline,
+            config=ExtractionPipelineConfig(enable_chunk_linking=True),
+        ).process_text(source, "chunk", session)
 
-        assert any("evidence quote" in error.lower() for error in result.errors)
+        assert result.errors == []
+        assert mock_pipeline.link.await_count == 1
+        from narrative_engine.storage.orm_models import EpisodeLinkORM
+
+        links = [call.args[0] for call in session.add.call_args_list if isinstance(call.args[0], EpisodeLinkORM)]
+        assert links == []
 
     @pytest.mark.asyncio
     async def test_linking_prefilter_skips_implausible_non_neighbor_pairs(self, mock_pipeline):
@@ -602,12 +876,13 @@ class TestExtractionOrchestrator:
         }
         orchestrator = ExtractionOrchestrator(pipeline=mock_pipeline)
 
-        with pytest.raises(ValueError, match="not present"):
-            await orchestrator._link_episode_pair(
-                Episode(title="A", summary="Documented cause"),
-                Episode(title="B", summary="Documented effect"),
-                AsyncMock(),
-            )
+        linked = await orchestrator._link_episode_pair(
+            Episode(title="A", summary="Documented cause"),
+            Episode(title="B", summary="Documented effect"),
+            AsyncMock(),
+        )
+
+        assert linked is False
 
     @pytest.mark.asyncio
     async def test_process_text_with_errors(self, mock_pipeline):
@@ -628,6 +903,33 @@ class TestExtractionOrchestrator:
         assert len(result.episodes) == 0
         assert len(result.errors) > 0
         assert "Segmentation failed" in result.errors[0]
+
+    @pytest.mark.asyncio
+    async def test_process_text_falls_back_when_segmentation_llm_fails(self, mock_pipeline):
+        """Optional segmentation must not discard an extractable chunk."""
+        mock_pipeline.segment.side_effect = LLMError("Response truncated")
+        mock_pipeline.extract.return_value = {
+            "title": "Fallback episode",
+            "summary": "The full bounded chunk was extracted.",
+            "actors": [],
+            "setting": {},
+        }
+        mock_pipeline.classify.return_value = {}
+        session = AsyncMock()
+        session.add = MagicMock()
+        session.flush = AsyncMock()
+
+        result = await ExtractionOrchestrator(pipeline=mock_pipeline).process_text(
+            text="A source chunk that remains safe to extract.",
+            source_chunk_id="chunk-1",
+            session=session,
+        )
+
+        assert result.errors == []
+        assert [episode.title for episode in result.episodes] == ["Fallback episode"]
+        assert mock_pipeline.extract.await_args.kwargs["segment_text"] == (
+            "A source chunk that remains safe to extract."
+        )
 
     @pytest.mark.asyncio
     async def test_classify_episode_mechanism_tags(self, mock_pipeline):
@@ -652,6 +954,106 @@ class TestExtractionOrchestrator:
             MechanismTag.CREDIT_EXPANSION,
             MechanismTag.ASSET_BUBBLE,
         ]
+
+    @pytest.mark.asyncio
+    async def test_classify_episode_normalizes_observed_renewal_phase(self, mock_pipeline):
+        """Semantic phase drift must not silently erase an otherwise valid arc."""
+        from narrative_engine.models import ArcPhase, ArcType, Episode
+
+        mock_pipeline.classify.return_value = {
+            "arc_type": "decadence_and_renewal",
+            "arc_phase": "renewal",
+            "phase_confidence": 0.9,
+            "secondary_arcs": [
+                {
+                    "type": "decadence_and_renewal",
+                    "phase": "renewal",
+                    "confidence": 0.8,
+                }
+            ],
+        }
+        episode = Episode(title="Reorganization", summary="Institutions recover.")
+
+        await ExtractionOrchestrator(pipeline=mock_pipeline)._classify_episode(episode)
+
+        assert episode.arc_phase == ArcPhase.RESOLUTION
+        assert episode.secondary_arcs == [
+            (ArcType.DECADENCE_AND_RENEWAL, ArcPhase.RESOLUTION, 0.8)
+        ]
+
+    @pytest.mark.asyncio
+    async def test_invalid_phase_clears_the_incomplete_legacy_arc(self, mock_pipeline):
+        """A high-confidence type without an orderable phase is not an arc."""
+        from narrative_engine.models import ChangePattern, Episode
+
+        mock_pipeline.classify.return_value = {
+            "change_pattern": "tension_and_contestation",
+            "pattern_confidence": 0.9,
+            "arc_type": "siege_and_collapse",
+            "arc_phase": "resistance",
+            "phase_confidence": 0.9,
+            "secondary_arcs": [],
+        }
+        episode = Episode(title="Resistance", summary="A group resisted an incumbent.")
+
+        await ExtractionOrchestrator(pipeline=mock_pipeline)._classify_episode(episode)
+
+        assert episode.change_pattern == ChangePattern.TENSION_AND_CONTESTATION
+        assert episode.arc_type is None
+        assert episode.arc_phase is None
+        assert episode.classification_state.value == "classified"
+
+    @pytest.mark.asyncio
+    async def test_classify_episode_tolerates_scalar_collection_fields(self, mock_pipeline):
+        """A malformed optional list from an LLM must not fail the document."""
+        from narrative_engine.models import (
+            Episode,
+            MechanismFamily,
+            MechanismTag,
+            SituationDomain,
+        )
+
+        mock_pipeline.classify.return_value = {
+            "domains": "political",
+            "mechanism_families": "competition_displacement",
+            "mechanism_tags": "identity_polarization",
+            "secondary_arcs": "none",
+        }
+        episode = Episode(title="Unification", summary="A polity was unified.")
+
+        await ExtractionOrchestrator(pipeline=mock_pipeline)._classify_episode(episode)
+
+        assert episode.domains == [SituationDomain.POLITICAL]
+        assert episode.mechanism_families == [MechanismFamily.COMPETITION_DISPLACEMENT]
+        assert episode.mechanism_tags == [MechanismTag.IDENTITY_POLARIZATION]
+        assert episode.secondary_arcs == []
+
+    @pytest.mark.asyncio
+    async def test_extract_segment_tolerates_scalar_and_malformed_collections(self, mock_pipeline):
+        mock_pipeline.extract.return_value = {
+            "title": "A reform begins",
+            "summary": "A reform coalition formed.",
+            "setting": "China",
+            "actors": ["not-an-actor", {"name": "Reformers", "role": "challenger"}],
+            "initiating_conditions": "Institutional pressure",
+            "escalation_mechanics": None,
+            "consequences": ["A new coalition formed", 42],
+        }
+
+        episode = await ExtractionOrchestrator(pipeline=mock_pipeline)._extract_segment(
+            {"text": "Source text", "summary": "Reform"},
+            "Source text",
+            "chunk-1",
+        )
+
+        assert episode is not None
+        assert episode.location is None
+        assert episode.initiating_conditions == ["Institutional pressure"]
+        assert episode.escalation_mechanics == []
+        assert episode.consequences == ["A new coalition formed"]
+        assert [actor.name for actor in episode.actors] == ["Reformers"]
+        assert episode.source_passages[0].text == "Source text"
+        assert episode.source_passages[0].passage_id.startswith("chunk-1:")
 
     @pytest.mark.asyncio
     async def test_extracts_unregistered_movement_inside_parent_scope(self, mock_pipeline):
@@ -686,6 +1088,37 @@ class TestExtractionOrchestrator:
         assert episode.parent_scope_name == "United States"
         assert episode.scope_confidence == 0.82
         assert episode.scope_notes and "contested" in episode.scope_notes
+
+    @pytest.mark.asyncio
+    async def test_constrained_scope_stage_accepts_only_high_confidence_candidate(self, mock_pipeline):
+        mock_pipeline.extract.return_value = {
+            "title": "Militant suffrage expands",
+            "summary": "British suffragists escalated their campaign.",
+            "setting": {"location": "United Kingdom", "start_date": "1903"},
+            "actors": [],
+            "focal_scope": {
+                "name": "British suffragists",
+                "kind": "movement",
+                "parent_name": "United Kingdom",
+                "confidence": 0.91,
+                "evidence_quote": "British suffragists escalated",
+            },
+        }
+        mock_pipeline.canonicalize_scope.return_value = {
+            "scope_id": "uk_womens_suffrage_movement",
+            "confidence": 0.94,
+            "reason": "The raw plural denotes the registered movement.",
+        }
+
+        episode = await ExtractionOrchestrator(pipeline=mock_pipeline)._extract_segment(
+            {"text": "British suffragists escalated their campaign.", "summary": "Campaign"},
+            "British suffragists escalated their campaign.",
+            "suffrage_1",
+        )
+
+        assert episode is not None
+        assert episode.scope_id == "uk_womens_suffrage_movement"
+        assert episode.scope_notes and episode.scope_notes.startswith("Registry match:")
 
     @pytest.mark.asyncio
     async def test_classifies_scale_neutral_group_pattern(self, mock_pipeline):
@@ -800,7 +1233,35 @@ class TestExtractionOrchestrator:
         assert episode.start_date is not None
         assert (episode.start_date.year, episode.start_date.month) == (1869, 10)
         assert episode.end_date is None
+        assert episode.start_year == 1869
+        assert episode.end_year is None
         assert episode.date_precision == "month"
+
+    @pytest.mark.asyncio
+    async def test_extract_segment_preserves_bce_years_without_datetime(self, mock_pipeline):
+        mock_pipeline.extract.return_value = {
+            "title": "Battle of Kadesh",
+            "summary": "Egypt and the Hittites fought at Kadesh.",
+            "setting": {
+                "location": "Kadesh",
+                "time_period_label": "1274 BCE",
+                "start_date": "-1274",
+                "end_date": "-1274",
+                "date_precision": "year",
+            },
+            "actors": [],
+        }
+
+        episode = await ExtractionOrchestrator(pipeline=mock_pipeline)._extract_segment(
+            {"summary": "Battle", "text": "The battle took place in 1274 BCE."},
+            "The battle took place in 1274 BCE.",
+            "chunk-bce",
+        )
+
+        assert episode.start_year == -1274
+        assert episode.end_year == -1274
+        assert episode.start_date is None
+        assert episode.end_date is None
 
     @pytest.mark.asyncio
     async def test_process_batch(self, mock_pipeline):

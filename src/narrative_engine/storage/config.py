@@ -6,6 +6,15 @@ import os
 from dataclasses import dataclass
 
 
+def _as_async_postgres_url(database_url: str) -> str:
+    """Normalize supported synchronous PostgreSQL URLs for asyncpg."""
+    if database_url.startswith("postgresql://"):
+        return database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    if database_url.startswith("postgresql+psycopg2://"):
+        return database_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
+    return database_url
+
+
 @dataclass(frozen=True)
 class DatabaseConfig:
     """Database connection configuration."""
@@ -22,14 +31,12 @@ class DatabaseConfig:
         database_url = os.getenv(f"{prefix}DATABASE_URL") or os.getenv("DATABASE_URL")
 
         if not database_url:
-            # Default local development database
-            database_url = "postgresql+asyncpg://localhost:5432/narrative_engine"
+            # Match the checked-in Docker Compose development database. An
+            # authority-free URL silently uses the host OS account and makes
+            # a fresh local checkout fail authentication by default.
+            database_url = "postgresql+asyncpg://postgres:postgres@localhost:5432/narrative_engine"
 
-        # Convert sync driver to async if needed
-        if database_url.startswith("postgresql://"):
-            database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        elif database_url.startswith("postgresql+psycopg2://"):
-            database_url = database_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
+        database_url = _as_async_postgres_url(database_url)
 
         return cls(
             database_url=database_url,
@@ -40,9 +47,11 @@ class DatabaseConfig:
 
     def with_test_db(self) -> DatabaseConfig:
         """Return config pointing to test database."""
-        test_url = self.database_url.rsplit("/", 1)[0] + "/narrative_engine_test"
+        test_url = os.getenv("NE_TEST_DATABASE_URL") or os.getenv("TEST_DATABASE_URL")
+        if not test_url:
+            test_url = self.database_url.rsplit("/", 1)[0] + "/narrative_engine_test"
         return DatabaseConfig(
-            database_url=test_url,
+            database_url=_as_async_postgres_url(test_url),
             echo=self.echo,
             pool_size=0,  # Use NullPool for tests
             max_overflow=0,

@@ -35,10 +35,26 @@ def _normalized_datetime(value: datetime) -> datetime:
     return value.astimezone(timezone.utc).replace(tzinfo=None)
 
 
-def _episode_date_key(episode: Episode) -> tuple[bool, datetime]:
-    if episode.start_date is None:
-        return True, datetime.max
-    return False, _normalized_datetime(episode.start_date)
+def _episode_start_year(episode: Episode) -> Optional[int]:
+    if episode.start_year is not None:
+        return episode.start_year
+    return episode.start_date.year if episode.start_date else None
+
+
+def _episode_end_year(episode: Episode) -> Optional[int]:
+    if episode.end_year is not None:
+        return episode.end_year
+    if episode.end_date:
+        return episode.end_date.year
+    return _episode_start_year(episode)
+
+
+def _episode_date_key(episode: Episode) -> tuple[bool, int, datetime]:
+    year = _episode_start_year(episode)
+    if year is None:
+        return True, 999_999, datetime.max
+    within_year = _normalized_datetime(episode.start_date) if episode.start_date else datetime.min
+    return False, year, within_year
 
 
 def normalize_actor_name(name: str) -> str:
@@ -181,6 +197,11 @@ class ArcIdentityResolver:
         # Stage 2: actor overlap (entity-resolved, not string match)
         actor_score = self._calculate_actor_overlap(episode_a, episode_b)
         actor_gate = self._passes_actor_gate(episode_a, episode_b, actor_score)
+        # A polity, institution, or movement persists while its individual
+        # office-holders change. Actor continuity remains a useful score but
+        # is only a hard identity requirement for genuinely episodic arcs.
+        if scale != "episodic":
+            actor_gate = True
         if actor_score > 0.5:
             match_reasons.append(f"Actor entity overlap ({actor_score:.2f})")
         elif not actor_gate:
@@ -216,7 +237,9 @@ class ArcIdentityResolver:
 
         # Evidence floor: count signals computed from data present on BOTH
         # sides (as opposed to neutral 0.5 defaults for missing data).
-        temporal_concrete = bool(episode_a.end_date and episode_b.start_date)
+        temporal_concrete = bool(
+            _episode_end_year(episode_a) is not None and _episode_start_year(episode_b) is not None
+        )
         actor_concrete = bool(episode_a.actors and episode_b.actors)
         surface_concrete = (
             episode_a.surface_embedding is not None
@@ -284,7 +307,9 @@ class ArcIdentityResolver:
 
         CORRECTION: Different thresholds for episodic vs institutional vs generational arcs.
         """
-        if not a.end_date or not b.start_date:
+        end_year = _episode_end_year(a)
+        start_year = _episode_start_year(b)
+        if end_year is None or start_year is None:
             return 0.5  # Neutral if dates unknown
 
         # CORRECTION: Select threshold based on the scale this comparison is
@@ -292,24 +317,27 @@ class ArcIdentityResolver:
         # other cycle-membership resolution may pass other scales).
         threshold = self.temporal_thresholds.get(scale, self.temporal_thresholds["institutional"])
 
-        # Gap between episodes (negative = overlap)
-        gap = _normalized_datetime(b.start_date) - _normalized_datetime(a.end_date)
+        # Prefer exact dates, then fall back to signed historical years for
+        # BCE and other dates outside Python/PostgreSQL datetime's range.
+        if a.end_date and b.start_date:
+            gap_years = (_normalized_datetime(b.start_date) - _normalized_datetime(a.end_date)).days / 365.0
+        else:
+            gap_years = float(start_year - end_year)
 
-        if gap.total_seconds() < 0:
+        if gap_years < 0:
             # Episodes overlap - maximum temporal connection
             return 1.0
 
         # Exponential decay based on gap
-        gap_days = gap.days
-        threshold_days = threshold.days
+        threshold_years = threshold.days / 365.0
 
-        if gap_days > threshold_days * 2:  # Allow some overflow
+        if gap_years > threshold_years * 2:  # Allow some overflow
             return 0.0
 
         # Exponential decay: score = exp(-3 * gap / threshold)
         import math
 
-        score = math.exp(-3.0 * gap_days / threshold_days)
+        score = math.exp(-3.0 * gap_years / threshold_years)
         return score
 
     def _calculate_actor_overlap(self, a: Episode, b: Episode) -> float:
@@ -390,19 +418,15 @@ class ArcIdentityResolver:
                 ArcPhase.PANIC,
                 ArcPhase.REVULSION,
             ],
-            ArcType.HUBRIS_NEMESIS: [
-                ArcPhase.SETUP,
-                ArcPhase.RISING_ACTION,
-                ArcPhase.CLIMAX,
-                ArcPhase.FALLING_ACTION,
-                ArcPhase.RESOLUTION,
-            ],
         }
-
-        phase_order = phase_orders.get(a.arc_type, [])
-
-        if not phase_order:
-            return 0.5  # Neutral for unknown arc types
+        standard_order = [
+            ArcPhase.SETUP,
+            ArcPhase.RISING_ACTION,
+            ArcPhase.CLIMAX,
+            ArcPhase.FALLING_ACTION,
+            ArcPhase.RESOLUTION,
+        ]
+        phase_order = phase_orders.get(a.arc_type, standard_order)
 
         try:
             idx_a = phase_order.index(a.arc_phase)
@@ -414,6 +438,9 @@ class ArcIdentityResolver:
         expected_gap = 1
         actual_gap = idx_b - idx_a
 
+        if actual_gap == 0:
+            # Independent sources often corroborate the same phase.
+            return 0.9
         if actual_gap == expected_gap:
             return 1.0  # Perfect sequence
         elif actual_gap > 0:
@@ -436,7 +463,15 @@ class ArcIdentityResolver:
         confidence = 0.5  # Base confidence
 
         # Increase confidence with more signals
-        if a.start_date and b.start_date and a.end_date and b.end_date:
+        if all(
+            year is not None
+            for year in (
+                _episode_start_year(a),
+                _episode_end_year(a),
+                _episode_start_year(b),
+                _episode_end_year(b),
+            )
+        ):
             confidence += 0.15
 
         if a.actors and b.actors:
@@ -537,8 +572,18 @@ class ArcIdentityResolver:
             summary=orm.summary or "",
             start_date=orm.start_date,
             end_date=orm.end_date,
+            start_year=orm.start_year,
+            end_year=orm.end_year,
+            date_precision=orm.date_precision,
             location=orm.location,
             scope_id=orm.scope_id,
+            scope_name=orm.scope_name,
+            scope_kind=orm.scope_kind,
+            parent_scope_name=orm.parent_scope_name,
+            scope_confidence=orm.scope_confidence,
+            scope_evidence=orm.scope_evidence,
+            scope_notes=orm.scope_notes,
+            situation_scale=orm.situation_scale,
             actors=[
                 Actor(
                     id=a.id,

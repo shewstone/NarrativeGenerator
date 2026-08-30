@@ -52,9 +52,9 @@ dependencies = [
     # not optional extras -- a book-ingesting system must parse books)
     "ebooklib>=0.18",
     "beautifulsoup4>=4.12.0",
-    "pdfplumber>=0.10.0",
     # MarkdownParser imports yaml for frontmatter in production installs.
     "pyyaml>=6.0",
+    "pypdf>=6.16.2",
 ]
 
 [project.optional-dependencies]

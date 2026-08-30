@@ -1,0 +1,52 @@
+[
+  {
+    "title": "African National Congress Statement to the Truth and Reconciliation Commission",
+    "coverage": "Primary ANC account restricted to the movement's historical rationale, transition from nonviolence to armed struggle, strategy and organization, internal dissent and abuses, mass mobilization, negotiations, and its own claims of responsibility",
+    "source_page": "https://www.justice.gov.za/trc/hrvtrans/submit/anctruth.htm",
+    "published_at": "1996-08-19",
+    "include_chunk_ranges": [[0, 0], [3, 6], [14, 17], [20, 25]],
+    "chunks_preselected": true,
+    "url": "https://justice.gov.za/trc/hrvtrans/trc-hrv-01.pdf",
+    "filename": "anc-statement-to-trc-1996.pdf"
+  },
+  {
+    "title": "Truth and Reconciliation Commission of South Africa Report, Volume Five",
+    "coverage": "Independent findings and conclusions on apartheid-era responsibility, including state institutions, liberation movements, the ANC's armed campaign, civilian harm, internal abuses, political rhetoric, and contested accountability",
+    "source_page": "https://www.justice.gov.za/trc/report/index.htm",
+    "published_at": "1998-10-29",
+    "include_chunk_ranges": [[32, 39]],
+    "chunks_preselected": true,
+    "url": "https://www.justice.gov.za/trc/report/finalreport/Volume5.pdf",
+    "filename": "south-africa-trc-volume-5-1998.pdf"
+  },
+  {
+    "title": "My Own Story",
+    "coverage": "Primary pro-suffrage account by Emmeline Pankhurst tracing the formation, growth, strategic escalation, factional choices, repression, prison campaigns, and political effects of Britain's militant women's movement",
+    "source_page": "https://www.gutenberg.org/ebooks/34856",
+    "published_at": "1914-01-01",
+    "include_chunk_ranges": [[0, 6], [10, 12], [16, 18], [20, 22]],
+    "chunks_preselected": true,
+    "url": "https://www.gutenberg.org/cache/epub/34856/pg34856.txt",
+    "filename": "pg34856-pankhurst-my-own-story.txt"
+  },
+  {
+    "title": "The Unexpurgated Case Against Woman Suffrage",
+    "coverage": "Contemporary British anti-suffrage argument documenting countermovement assumptions, anxieties, rhetoric, proposed alternatives, and opposition to the suffragist program",
+    "source_page": "https://www.gutenberg.org/ebooks/5183",
+    "published_at": "1913-01-01",
+    "include_chunk_ranges": [[0, 6]],
+    "chunks_preselected": true,
+    "url": "https://www.gutenberg.org/cache/epub/5183/pg5183.txt",
+    "filename": "pg5183-case-against-woman-suffrage.txt"
+  },
+  {
+    "title": "Report of the International Commission to Inquire into the Causes and Conduct of the Balkan Wars",
+    "coverage": "Independent international commission evidence on Balkan nationalist programs, alliance formation and rupture, Bulgarian, Serbian, Greek, Ottoman, and local perspectives, wartime atrocities, displacement, and the competing narratives surrounding the 1912-1913 wars",
+    "source_page": "https://archive.org/details/reportofinternat00inteiala",
+    "published_at": "1914-01-01",
+    "include_chunk_ranges": [[0, 14], [17, 20]],
+    "chunks_preselected": true,
+    "url": "https://upload.wikimedia.org/wikipedia/commons/1/1e/Report_of_the_International_commission_to_inquire_into_the_causes_and_conduct_of_the_Balkan_wars_%28IA_reportofinternat00inteiala%29.pdf",
+    "filename": "carnegie-balkan-wars-commission-1914.pdf"
+  }
+]

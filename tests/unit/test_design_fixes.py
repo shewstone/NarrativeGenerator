@@ -11,7 +11,7 @@ Covers:
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -295,6 +295,14 @@ class TestDataLayerMasking:
         episode = make_episode(start_date=datetime(1930, 1, 1))
         assert mask_episode_at(episode, self.CUTOFF) is None
 
+    def test_source_published_after_cutoff_dropped(self):
+        episode = make_episode(
+            start_date=datetime(1907, 10, 1),
+            end_date=datetime(1907, 11, 1),
+            source_published_at=datetime(2026, 8, 29, tzinfo=timezone.utc),
+        )
+        assert mask_episode_at(episode, self.CUTOFF) is None
+
     def test_resolved_before_cutoff_untouched(self):
         episode = make_episode(
             start_date=datetime(1907, 10, 1),
@@ -333,6 +341,25 @@ class TestDataLayerMasking:
             e.resolution is None or (e.end_date and e.end_date <= self.CUTOFF)
             for e in masked
         )
+
+    def test_strict_mask_excludes_sources_with_unknown_availability(self):
+        unknown = make_episode(
+            start_date=datetime(1907, 10, 1),
+            end_date=datetime(1907, 11, 1),
+        )
+        dated = make_episode(
+            start_date=datetime(1908, 1, 1),
+            end_date=datetime(1908, 2, 1),
+            source_published_at=datetime(1908, 12, 31, tzinfo=timezone.utc),
+        )
+
+        masked = mask_corpus_at(
+            [unknown, dated],
+            self.CUTOFF,
+            require_source_dates=True,
+        )
+
+        assert masked == [dated]
 
 
 class TestBaselines:

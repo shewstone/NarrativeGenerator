@@ -62,8 +62,14 @@ class TestDashboardShell:
         response = await client.get("/")
         assert response.status_code == 200
         assert "NARRATIVE ENGINE" in response.text
-        assert "Arc Space" in response.text
+        assert "Facet River" in response.text
+        assert "Arc Storyboard" in response.text
+        assert "Constellation" in response.text
+        assert "Similarity Space" in response.text
         assert "Evidence inspector" in response.text
+        assert "Formed arcs & candidates" in response.text
+        assert 'kind === "party"' in response.text
+        assert "/api/episodes" in response.text
         assert "/api/arc-space" in response.text
 
     @pytest.mark.asyncio
@@ -72,7 +78,15 @@ class TestDashboardShell:
         assert response.status_code == 200
         body = response.json()
         assert body["status"] == "ok"
-        assert set(body) >= {"documents", "episodes", "arc_instances", "pending_reviews"}
+        assert set(body) >= {
+            "documents",
+            "episodes",
+            "arc_instances",
+            "formed_arcs",
+            "arc_candidates",
+            "pending_reviews",
+            "quality",
+        }
 
 
 class TestDocumentsEndpoint:
@@ -195,6 +209,108 @@ class TestArcInstancesEndpoint:
         # Gap visibility: expected phases include ones NOT covered.
         assert set(arc["expected_phases"]) - set(arc["covered_phases"])
         assert arc["episodes"][0]["link_status"] == "inferred"
+        assert arc["formation_status"] == "candidate"
+        assert arc["episode_count"] == 1
+        assert arc["phase_count"] == 1
+        assert arc["formation_gaps"]
+
+    @pytest.mark.asyncio
+    async def test_promotes_only_multi_episode_multi_phase_evidence(self, client, db_session):
+        repo = EpisodeRepository(db_session)
+        episodes = [
+            Episode(
+                title="Expansion",
+                summary="s",
+                arc_type=ArcType.CREDIT_BOOM_AND_BUST,
+                arc_phase=ArcPhase.BOOM,
+                extracted_from=["work-a_1"],
+            ),
+            Episode(
+                title="Euphoria",
+                summary="s",
+                arc_type=ArcType.CREDIT_BOOM_AND_BUST,
+                arc_phase=ArcPhase.EUPHORIA,
+                extracted_from=["work-a_2"],
+            ),
+            Episode(
+                title="Panic",
+                summary="s",
+                arc_type=ArcType.CREDIT_BOOM_AND_BUST,
+                arc_phase=ArcPhase.PANIC,
+                extracted_from=["work-b_1"],
+            ),
+        ]
+        for episode in episodes:
+            await repo.create(episode)
+
+        instance = Cycle(
+            name="credit_boom_and_bust, Example, 1900–1902",
+            scale=CycleScale.EPISODIC,
+            is_arc_instance=True,
+            dominant_arc_types=[ArcType.CREDIT_BOOM_AND_BUST],
+        )
+        await CycleRepository(db_session).create(instance)
+        for episode in episodes:
+            await CycleMembershipRepository(db_session).create(
+                CycleMembership(
+                    episode_id=episode.id,
+                    cycle_id=instance.id,
+                    link_status=LinkStatus.INFERRED,
+                    review_status=ReviewStatus.APPROVED,
+                )
+            )
+
+        arc = (await client.get("/api/arc-instances")).json()[0]
+        assert arc["formation_status"] == "formed"
+        assert arc["episode_count"] == 3
+        assert arc["phase_count"] == 3
+        assert arc["source_count"] == 2
+        assert arc["cross_source"] is True
+        assert arc["human_reviewed"] is True
+
+        health = (await client.get("/api/health")).json()
+        assert health["formed_arcs"] == 1
+        assert health["arc_candidates"] == 0
+
+
+class TestEpisodesEndpoint:
+    @pytest.mark.asyncio
+    async def test_returns_complete_lightweight_chronology_without_embeddings(
+        self, client, db_session
+    ):
+        repo = EpisodeRepository(db_session)
+        early = Episode(
+            title="Early episode",
+            summary="An early observation.",
+            change_pattern=ChangePattern.EMERGENCE_AND_GATHERING,
+            scope_name="Example movement",
+            scope_kind=ScopeKind.MOVEMENT,
+            parent_scope_name="United States",
+            start_date=datetime(1901, 1, 1, tzinfo=UTC),
+        )
+        late = Episode(
+            title="Late episode",
+            summary="A later observation without an embedding.",
+            change_pattern=ChangePattern.RENEWAL_AND_INTEGRATION,
+            scope_name="Example movement",
+            scope_kind=ScopeKind.MOVEMENT,
+            parent_scope_name="United States",
+            start_date=datetime(2025, 1, 1, tzinfo=UTC),
+        )
+        await repo.create(early)
+        await repo.create(late)
+
+        response = await client.get("/api/episodes")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["total"] == 2
+        assert body["truncated"] is False
+        assert [node["title"] for node in body["nodes"]] == ["Early episode", "Late episode"]
+        assert all("x" not in node and "y" not in node and "z" not in node for node in body["nodes"])
+        assert all(
+            node["scope_path"] == ["Western Civilization", "United States", "Example movement"]
+            for node in body["nodes"]
+        )
 
 
 class TestArcSpaceEndpoint:
@@ -218,6 +334,7 @@ class TestArcSpaceEndpoint:
             parent_scope_name="United States",
             scope_confidence=0.9,
             start_date=datetime(1906, 1, 1, tzinfo=UTC),
+            source_published_at=datetime(1908, 1, 1, tzinfo=UTC),
         )
         second = Episode(
             title="Banking panic",
@@ -307,10 +424,17 @@ class TestArcSpaceEndpoint:
                 "change_pattern",
                 "configuration",
                 "scope_path",
+                "source_published_at",
             }
             for node in body["nodes"]
         )
-        assert all(node["scope_path"] == ["United States", "Example movement"] for node in body["nodes"])
+        assert all(
+            node["scope_path"] == ["Western Civilization", "United States", "Example movement"]
+            for node in body["nodes"]
+        )
+        assert next(node for node in body["nodes"] if node["title"] == "Credit expansion")[
+            "source_published_at"
+        ] == "1908-01-01T00:00:00+00:00"
 
         knn = next(edge for edge in body["edges"] if edge["kind"] == "structural_neighbor")
         assert knn["structural_similarity"] > 0.9
@@ -320,11 +444,26 @@ class TestArcSpaceEndpoint:
         trajectory = next(edge for edge in body["edges"] if edge["kind"] == "arc_sequence")
         assert trajectory["arc_name"] == cycle.name
         assert trajectory["review_status"] == "pending"
+        assert trajectory["formation_status"] == "candidate"
         assert not any(edge.get("arc_name") == rejected_cycle.name for edge in body["edges"])
         assert not any(edge["kind"] == "same_event_as" for edge in body["edges"])
         scope_trajectory = next(edge for edge in body["edges"] if edge["kind"] == "scope_sequence")
         assert scope_trajectory["source_pattern"] == "emergence_and_gathering"
         assert scope_trajectory["target_pattern"] == "expansion_and_consolidation"
+        context_trajectory = next(
+            edge
+            for edge in body["edges"]
+            if edge["kind"] == "scope_sequence" and edge["scope_name"] == "United States"
+        )
+        assert context_trajectory["source_scope_relation"] == "parent"
+        assert context_trajectory["target_scope_relation"] == "parent"
+        ancestor_trajectory = next(
+            edge
+            for edge in body["edges"]
+            if edge["kind"] == "scope_sequence" and edge["scope_name"] == "Western Civilization"
+        )
+        assert ancestor_trajectory["source_scope_relation"] == "ancestor"
+        assert ancestor_trajectory["target_scope_relation"] == "ancestor"
 
 
 class TestReviewFlow:

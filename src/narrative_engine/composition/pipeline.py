@@ -13,7 +13,12 @@ from sqlalchemy.orm import selectinload
 from narrative_engine.composition.arc_instance import (
     ArcInstance,
 )
-from narrative_engine.composition.identity import ArcIdentityResolver, _episode_date_key
+from narrative_engine.composition.identity import (
+    ArcIdentityResolver,
+    _episode_date_key,
+    _episode_end_year,
+    _episode_start_year,
+)
 from narrative_engine.models import (
     ArcPhase,
     ArcType,
@@ -89,6 +94,7 @@ def _build_instance_from_cluster(
     arc_type: ArcType,
     cluster: List[Episode],
     expected_phases: Optional[List[ArcPhase]],
+    scale: CycleScale,
 ) -> Optional[ArcInstance]:
     """Build an Arc Instance from a cluster of (already-matched) episodes."""
     if not cluster:
@@ -98,17 +104,29 @@ def _build_instance_from_cluster(
     last_ep = cluster[-1]
 
     location = first_ep.location or "Unknown Location"
-    start_year = first_ep.start_date.year if first_ep.start_date else "?"
-    end_year = last_ep.end_date.year if last_ep.end_date else "?"
+    start_year = _episode_start_year(first_ep)
+    end_year = _episode_end_year(last_ep)
 
-    focal_scope = first_ep.scope_id or first_ep.scope_name
+    def year_label(year: Optional[int]) -> str:
+        if year is None:
+            return "?"
+        return f"{abs(year)} BCE" if year < 0 else str(year)
+
+    from narrative_engine.scopes import resolve_scope
+
+    raw_scope = first_ep.scope_id or first_ep.scope_name
+    # Partitioning already resolves registered aliases; persist that same
+    # canonical ID so the dashboard can group and traverse the hierarchy.
+    # Unregistered labels remain explicit instead of collapsing to None.
+    focal_scope = resolve_scope(raw_scope) or raw_scope
     scope_label = first_ep.scope_name or location
-    canonical_name = f"{arc_type.value}, {scope_label}, {start_year}–{end_year}"
+    canonical_name = f"{arc_type.value}, {scope_label}, {year_label(start_year)}–{year_label(end_year)}"
 
     instance = ArcInstance(
         arc_type=arc_type,
         canonical_name=canonical_name,
         scope_id=focal_scope,
+        scale=scale,
         start_date=first_ep.start_date,
         end_date=last_ep.end_date,
     )
@@ -137,6 +155,79 @@ def _build_instance_from_cluster(
     instance.update_status()
 
     return instance
+
+
+def _infer_composition_scale(
+    episodes: Sequence[Episode],
+    fallback: CycleScale,
+) -> CycleScale:
+    """Choose identity timing from extracted scale, subject kind, and span."""
+    situation_mapping = {
+        "personal": CycleScale.EPISODIC,
+        "interpersonal": CycleScale.EPISODIC,
+        "group": CycleScale.INSTITUTIONAL,
+        "organization": CycleScale.INSTITUTIONAL,
+        "institution": CycleScale.INSTITUTIONAL,
+        "polity": CycleScale.GENERATIONAL,
+        "civilization": CycleScale.CIVILIZATIONAL,
+        "system": CycleScale.CIVILIZATIONAL,
+    }
+    kind_mapping = {
+        "person": CycleScale.EPISODIC,
+        "dyad": CycleScale.EPISODIC,
+        "group": CycleScale.INSTITUTIONAL,
+        "faction": CycleScale.INSTITUTIONAL,
+        "organization": CycleScale.INSTITUTIONAL,
+        "institution": CycleScale.INSTITUTIONAL,
+        "party": CycleScale.GENERATIONAL,
+        "movement": CycleScale.GENERATIONAL,
+        "polity": CycleScale.GENERATIONAL,
+        "civilization": CycleScale.CIVILIZATIONAL,
+        "region": CycleScale.CIVILIZATIONAL,
+        "system": CycleScale.CIVILIZATIONAL,
+    }
+    votes: Dict[CycleScale, int] = {}
+    scale_rank = {
+        CycleScale.EPISODIC: 0,
+        CycleScale.INSTITUTIONAL: 1,
+        CycleScale.GENERATIONAL: 2,
+        CycleScale.CIVILIZATIONAL: 3,
+    }
+    for episode in episodes:
+        situation = (
+            episode.situation_scale.value
+            if hasattr(episode.situation_scale, "value")
+            else episode.situation_scale
+        )
+        scope_kind = episode.scope_kind.value if hasattr(episode.scope_kind, "value") else episode.scope_kind
+        candidates = [
+            candidate
+            for candidate in (
+                situation_mapping.get(situation),
+                kind_mapping.get(scope_kind),
+            )
+            if candidate is not None
+        ]
+        inferred = max(candidates, key=scale_rank.get) if candidates else None
+        if inferred:
+            votes[inferred] = votes.get(inferred, 0) + 1
+
+    scale = max(votes, key=votes.get) if votes else fallback
+    years = [
+        year
+        for episode in episodes
+        for year in (_episode_start_year(episode), _episode_end_year(episode))
+        if year is not None
+    ]
+    if years:
+        span = max(years) - min(years)
+        if span >= 80:
+            scale = CycleScale.CIVILIZATIONAL
+        elif span >= 20 and scale in {CycleScale.EPISODIC, CycleScale.INSTITUTIONAL}:
+            scale = CycleScale.GENERATIONAL
+        elif span >= 5 and scale == CycleScale.EPISODIC:
+            scale = CycleScale.INSTITUTIONAL
+    return scale
 
 
 def _cluster_within_scope(
@@ -214,7 +305,11 @@ def compose_arc_instances_from_episodes(
     """
     resolver = resolver or ArcIdentityResolver()
 
-    relevant = [e for e in episodes if e.arc_type == arc_type and e.start_date]
+    relevant = [
+        e
+        for e in episodes
+        if e.arc_type == arc_type and (e.start_date is not None or e.start_year is not None)
+    ]
 
     # Stage 1: hard filter -- partition by scope_id. Episodes in different
     # scopes are never compared, by construction. Episodes with NO scope are
@@ -246,14 +341,26 @@ def compose_arc_instances_from_episodes(
 
     instances: List[ArcInstance] = []
     for scope_episodes in by_scope.values():
-        clusters = _cluster_within_scope(scope_episodes, resolver, scale)
+        inferred_scale = _infer_composition_scale(scope_episodes, scale)
+        clusters = _cluster_within_scope(scope_episodes, resolver, inferred_scale)
         for cluster in clusters:
-            instance = _build_instance_from_cluster(arc_type, cluster, expected_phases)
+            instance = _build_instance_from_cluster(
+                arc_type,
+                cluster,
+                expected_phases,
+                inferred_scale,
+            )
             if instance:
                 instances.append(instance)
 
     for episode in unscoped:
-        instance = _build_instance_from_cluster(arc_type, [episode], expected_phases)
+        inferred_scale = _infer_composition_scale([episode], scale)
+        instance = _build_instance_from_cluster(
+            arc_type,
+            [episode],
+            expected_phases,
+            inferred_scale,
+        )
         if instance:
             instances.append(instance)
 
@@ -331,7 +438,7 @@ class CompositionPipeline:
 
         cycle = Cycle(
             name=instance.canonical_name,
-            scale=self.config.scale,
+            scale=instance.scale,
             scope_id=instance.scope_id,
             start_date=instance.start_date,
             end_date=instance.end_date,
@@ -442,7 +549,7 @@ class CompositionPipeline:
 
             reused_ids.add(existing_cycle.id)
             existing_cycle.name = instance.canonical_name
-            existing_cycle.scale = self.config.scale
+            existing_cycle.scale = instance.scale
             existing_cycle.scope_id = instance.scope_id
             existing_cycle.start_date = instance.start_date
             existing_cycle.end_date = instance.end_date

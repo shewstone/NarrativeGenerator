@@ -39,6 +39,19 @@ def _client(response=None, config=None):
     return client, fake_sdk.messages.create
 
 
+def _openai_response(*, finish_reason="stop", text='{"ok": true}'):
+    return SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                finish_reason=finish_reason,
+                message=SimpleNamespace(content=text),
+            )
+        ],
+        model="zai-org-glm-5-1",
+        usage=SimpleNamespace(prompt_tokens=100, completion_tokens=20, total_tokens=120),
+    )
+
+
 class TestRequestShape:
     @pytest.mark.asyncio
     async def test_no_sampling_parameters_ever(
@@ -102,6 +115,41 @@ class TestStopReasons:
 
         with pytest.raises(LLMError, match="truncated"):
             await client.complete("prompt")
+
+    @pytest.mark.asyncio
+    async def test_openai_truncation_retries_once_with_double_budget(self):
+        client = OpenAIClient(
+            LLMConfig(provider="openai", model="zai-org-glm-5-1", api_key="test")
+        )
+        create = AsyncMock(
+            side_effect=[
+                _openai_response(finish_reason="length", text="{"),
+                _openai_response(),
+            ]
+        )
+        client.client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=create)),
+        )
+
+        result = await client.complete("prompt")
+
+        assert result["content"] == '{"ok": true}'
+        assert [call.kwargs["max_tokens"] for call in create.await_args_list] == [4000, 8000]
+
+    @pytest.mark.asyncio
+    async def test_openai_second_truncation_still_fails(self):
+        client = OpenAIClient(
+            LLMConfig(provider="openai", model="zai-org-glm-5-1", api_key="test")
+        )
+        create = AsyncMock(return_value=_openai_response(finish_reason="length", text="{"))
+        client.client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=create)),
+        )
+
+        with pytest.raises(LLMError, match="truncated at max_tokens=8000"):
+            await client.complete("prompt")
+
+        assert create.await_count == 2
 
 
 class TestJsonParsing:

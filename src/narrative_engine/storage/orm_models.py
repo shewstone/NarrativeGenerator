@@ -264,6 +264,8 @@ class EpisodeORM(Base):
     # Temporal fields
     start_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     end_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    start_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    end_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     date_precision: Mapped[str] = mapped_column(String(20), default="year")
 
     # Setting
@@ -329,6 +331,9 @@ class EpisodeORM(Base):
 
     # Provenance
     extracted_from: Mapped[list] = mapped_column(JSON, default=list)  # chunk IDs
+    source_published_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
 
     # Relationships
     actors: Mapped[List["ActorORM"]] = relationship(
@@ -374,6 +379,7 @@ class EpisodeORM(Base):
         Index("ix_episodes_arc_type", "arc_type"),
         Index("ix_episodes_arc_phase", "arc_phase"),
         Index("ix_episodes_start_date", "start_date"),
+        Index("ix_episodes_start_year", "start_year"),
         Index("ix_episodes_scope_id", "scope_id"),
         Index("ix_episodes_scope_name", "scope_name"),
         Index("ix_episodes_change_pattern", "change_pattern"),

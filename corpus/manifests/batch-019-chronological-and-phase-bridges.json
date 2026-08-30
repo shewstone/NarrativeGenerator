@@ -1,0 +1,52 @@
+[
+  {
+    "title": "A Literary History of the Arabs",
+    "coverage": "An independent scholarly account of the end of Ali's caliphate, Hasan's succession and settlement with Muawiya, Umayyad consolidation, the resulting political factions, and the longer Sunni-Shia division",
+    "source_page": "https://www.gutenberg.org/ebooks/37985",
+    "published_at": "1907-01-01",
+    "include_chunk_ranges": [[22, 25]],
+    "chunks_preselected": true,
+    "url": "https://www.gutenberg.org/cache/epub/37985/pg37985.txt",
+    "filename": "pg37985-literary-history-arabs-first-fitna-aftermath.txt"
+  },
+  {
+    "title": "Bohemia: From the Earliest Times to the Fall of National Independence in 1620",
+    "coverage": "A continuous account of Hus's posthumous legacy through Utraquist and Taborite mobilization, the Hussite wars, factional division, negotiation with Basel, the fall of Tabor, and political-religious settlement",
+    "source_page": "https://www.gutenberg.org/ebooks/49955",
+    "published_at": "1896-01-01",
+    "include_chunk_ranges": [[19, 28]],
+    "chunks_preselected": true,
+    "url": "https://www.gutenberg.org/cache/epub/49955/pg49955.txt",
+    "filename": "pg49955-bohemia-hussite-aftermath.txt"
+  },
+  {
+    "title": "The 'Year of Cetshwayo' Revisited",
+    "coverage": "A South African historical reassessment focused on Cetshwayo's constrained restoration, the 1883 civil conflict, his defeat and death, and the symbolic demise of the old Zulu political order",
+    "source_page": "https://sahistory.org.za/sites/default/files/archive-files2/remar84.5.pdf",
+    "published_at": "1984-01-01",
+    "include_chunk_ranges": [[0, 0]],
+    "chunks_preselected": true,
+    "url": "https://sahistory.org.za/sites/default/files/archive-files2/remar84.5.pdf",
+    "filename": "cetshwayo-restoration-aftermath-1984.pdf"
+  },
+  {
+    "title": "Bulgaria: A Country Study",
+    "coverage": "Library of Congress account focused on Bulgaria's defeat in the Second Balkan War, renewed territorial ambitions in World War I, collapse at Dobro Pole, Ferdinand's abdication, the Treaty of Neuilly, and interwar reaction",
+    "source_page": "https://www.loc.gov/item/93010955/",
+    "published_at": "1992-06-01",
+    "include_chunk_ranges": [[8, 8]],
+    "chunks_preselected": true,
+    "url": "https://tile.loc.gov/storage-services/master/frd/frdcstdy/bu/bulgariacountrys00curt_0/bulgariacountrys00curt_0.pdf",
+    "filename": "loc-bulgaria-national-catastrophes-1992.pdf"
+  },
+  {
+    "title": "CCP Decision-Making and Xi Jinping's Centralization of Authority",
+    "coverage": "Independent institutional analysis connecting post-Mao collective leadership reforms to their erosion under Xi, renewed Party control, centralization, campaign governance, and the political reaction against reform-era constraints",
+    "source_page": "https://www.uscc.gov/annual-report/2022-annual-report-congress",
+    "published_at": "2022-11-15",
+    "include_chunk_ranges": [[0, 4]],
+    "chunks_preselected": true,
+    "url": "https://www.uscc.gov/sites/default/files/2022-11/Chapter_1--CCP_Decision-Making_and_Xi_Jinpings_Centralization_of_Authority.pdf",
+    "filename": "uscc-ccp-xi-centralization-2022.pdf"
+  }
+]

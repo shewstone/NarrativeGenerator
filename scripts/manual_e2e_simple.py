@@ -8,13 +8,14 @@ from datetime import datetime
 # Set database URL before imports
 os.environ["DATABASE_URL"] = "postgresql+asyncpg://postgres:postgres@localhost:5432/narrative_engine"
 
+from sqlalchemy import text
+
 from narrative_engine.models import (
     ArcPhase,
     ArcType,
     CycleScale,
 )
 from narrative_engine.storage.database import DatabaseManager
-from sqlalchemy import text
 
 
 async def test_database_connection():
@@ -50,7 +51,7 @@ async def test_database_connection():
         print(f"     - {scale.value}")
 
     print("\n4. Testing episode model creation...")
-    from narrative_engine.models import Episode, Actor
+    from narrative_engine.models import Actor, Episode
 
     actor = Actor(
         id=uuid.uuid4(),
@@ -91,7 +92,7 @@ async def test_database_connection():
     print(f"     Phase: {cycle.phase_estimate.value}")
 
     print("\n6. Testing thesis model creation...")
-    from narrative_engine.models import Thesis, Continuation, ThesisConfidence
+    from narrative_engine.models import Continuation, Thesis, ThesisConfidence
 
     thesis = Thesis(
         id=uuid.uuid4(),
